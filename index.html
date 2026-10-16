@@ -127,15 +127,12 @@
               <button data-option="D" class="poll-opt-btn py-1.5 rounded-lg text-xs font-bold border transition-all bg-slate-800 border-slate-700 text-amber-300 hover:bg-slate-700">
                 Poll D
               </button>
-              <button data-option="PAUSE" class="poll-opt-btn py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700" title="Stop scanning so students can put hands down">
+              <button data-option="PAUSE" class="poll-opt-btn py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700" title="Pause scanning so students can put hands down">
                 Hold
               </button>
             </div>
             <div class="flex items-center gap-1.5 pt-0.5">
-              <button id="btnLockAndHandsDown" type="button" class="flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 transition flex items-center justify-center gap-1" title="Stop scanning current option and tell students to put hands down">
-                <span>✋ Stop &amp; Lock A (Hands Down)</span>
-              </button>
-              <button id="btnAdvanceNextOption" type="button" class="py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1 shadow" title="Start scanning the next option (A → B → C → D)">
+              <button id="btnAdvanceNextOption" type="button" class="flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1 shadow" title="Start scanning the next option (A → B → C → D)">
                 <span id="nextOptBtnLabel">Next: Poll B →</span>
               </button>
             </div>
@@ -1727,7 +1724,6 @@
       const banner = document.getElementById('handsDownOverlayBanner');
       const bannerTitle = document.getElementById('handsDownBannerTitle');
       const bannerSub = document.getElementById('handsDownBannerSub');
-      const lockBtn = document.getElementById('btnLockAndHandsDown');
       const nextBtnLabel = document.getElementById('nextOptBtnLabel');
 
       const nextOpt = getNextPollOption(appState.lastScannedOption);
@@ -1748,10 +1744,8 @@
         banner.classList.remove('hidden');
         bannerTitle.textContent = `✋ Hands Down! Option ${appState.lastScannedOption} Votes Locked`;
         bannerSub.textContent = `Scanner is paused so lowering hands won't trigger false votes. Click "Next: Scan ${nextOpt} →" when ready.`;
-        lockBtn.innerHTML = `<span>🔒 Option ${appState.lastScannedOption} Locked (Hands Down)</span>`;
       } else {
         banner.classList.add('hidden');
-        lockBtn.innerHTML = `<span>✋ Stop &amp; Lock ${opt} (Hands Down)</span>`;
       }
 
       nextBtnLabel.textContent = `Next: Scan ${nextOpt} →`;
@@ -1802,15 +1796,6 @@
           setActivePollOption(targetOpt);
           updateLiveSeatingUI();
         });
-      });
-
-      document.getElementById('btnLockAndHandsDown').addEventListener('click', () => {
-        const lockedOpt = appState.lastScannedOption;
-        appState.simRaisedSeats = {};
-        appState.liveHandRaisedMap = {};
-        setActivePollOption('PAUSE');
-        updateLiveSeatingUI();
-        showToast(`Option ${lockedOpt} locked! Ask students to put their hands down before scanning the next option.`);
       });
 
       document.getElementById('btnAdvanceNextOption').addEventListener('click', () => {
