@@ -176,8 +176,14 @@
                 </svg>
                 <span id="webcamBtnLabel">Start Real Webcam</span>
               </button>
+              <button id="btnSwitchCamera" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition hidden" title="Switch between front and rear camera">
+                Switch Cam
+              </button>
               <button id="btnCalibrateBaseline" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Capture empty/hands-down baseline frame for accurate motion contrast">
                 Calibrate Hands-Down
+              </button>
+              <button id="btnFaceZones" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-violet-700 hover:bg-violet-600 text-white transition" title="Detect faces live to place seat boxes (nothing is recorded)">
+                Auto-place from faces
               </button>
               <select id="detectionMethodSelect" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1.5 border border-slate-700 focus:outline-none">
                 <option value="MOTION_ZONE">Mode: Hand-Raise Zone Motion (Sequential A/B/C/D)</option>
@@ -186,7 +192,8 @@
             </div>
           </div>
 
-          <!-- Video + Interactive Overlay Canvas Container -->
+                      <p id="privacyNote" class="text-[10px] text-slate-500 px-1 pb-1 leading-snug">Camera is live-only — no faces or video are saved; only seat names and A–D answers are stored.</p>
+<!-- Video + Interactive Overlay Canvas Container -->
           <div class="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
             <video id="webcamVideo" class="hidden w-full h-full object-cover" playsinline muted></video>
             <canvas id="scannerCanvas" class="w-full h-full block cursor-pointer"></canvas>
@@ -605,6 +612,11 @@
       sensitivity: 55,
       mirrorCam: true,
       webcamActive: false,
+      videoDeviceId: null,
+      videoDevices: [],
+      preferRearCamera: true,
+      faceZoneOverride: null, // { seatId: {x,y,w,h,raiseY,raiseH} } or null
+      faceDetectorReady: false,
       currentQuestionNum: 2,
       // Live runtime maps keyed by seat.id
       currentResponses: {},     // { seat_0_0: 'A' | 'B' | 'C' | 'D' }
@@ -716,19 +728,255 @@
           raiseH: h * 0.52
         };
       });
+      if (appState.faceZoneOverride) {
+        Object.keys(appState.faceZoneOverride).forEach(id => {
+          if (boxes[id]) boxes[id] = { ...boxes[id], ...appState.faceZoneOverride[id] };
+        });
+      }
       seatBoxCoords = boxes;
       return boxes;
     }
 
     // Start or Stop Real Webcam
+    
+
+    // ---- Face-zone assist (live only; never saved) ----
+    let _nativeFaceDetector = null;
+    let _mpFaceDetector = null;
+    let _mpLoading = null;
+
+    async function ensureFaceDetector() {
+      if (window.FaceDetector) {
+        try {
+          _nativeFaceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 40 });
+          appState.faceDetectorReady = true;
+          return 'native';
+        } catch (e) { /* fall through */ }
+      }
+      if (_mpFaceDetector) {
+        appState.faceDetectorReady = true;
+        return 'mediapipe';
+      }
+      if (_mpLoading) return _mpLoading;
+      _mpLoading = (async () => {
+        // Load MediaPipe Tasks Vision Face Detector from CDN (works on many tablets where FaceDetector is missing)
+        if (!window.FilesetResolver) {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js';
+            s.async = true;
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('MediaPipe script failed to load'));
+            document.head.appendChild(s);
+          });
+        }
+        const vision = window;
+        const FilesetResolver = vision.FilesetResolver || window.FilesetResolver;
+        const FaceDetector = vision.FaceDetector || window.FaceDetector;
+        // tasks-vision UMD exposes via global differently — use dynamic import fallback
+        let mod;
+        try {
+          mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+        } catch (e) {
+          throw new Error('Could not load face detection library');
+        }
+        const fileset = await mod.FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+        );
+        _mpFaceDetector = await mod.FaceDetector.createFromOptions(fileset, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+            delegate: 'GPU'
+          },
+          runningMode: 'IMAGE',
+          minDetectionConfidence: 0.4
+        });
+        appState.faceDetectorReady = true;
+        return 'mediapipe';
+      })();
+      try {
+        return await _mpLoading;
+      } finally {
+        _mpLoading = null;
+      }
+    }
+
+    async function detectFacesInVideo() {
+      if (!videoEl || videoEl.readyState < 2) throw new Error('Start the webcam first');
+      const kind = await ensureFaceDetector();
+      const w = videoEl.videoWidth || 640;
+      const h = videoEl.videoHeight || 480;
+
+      // Draw current frame to a canvas (honour mirror for detection coords matching overlay)
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const cctx = c.getContext('2d');
+      if (appState.mirrorCam) {
+        cctx.translate(w, 0); cctx.scale(-1, 1);
+      }
+      cctx.drawImage(videoEl, 0, 0, w, h);
+
+      let boxes = []; // {x,y,w,h} in 0..1 of video
+      if (kind === 'native' && _nativeFaceDetector) {
+        const faces = await _nativeFaceDetector.detect(c);
+        boxes = faces.map(f => {
+          const b = f.boundingBox;
+          return { x: b.x / w, y: b.y / h, w: b.width / w, h: b.height / h };
+        });
+      } else if (_mpFaceDetector) {
+        const result = _mpFaceDetector.detect(c);
+        const dets = result.detections || [];
+        boxes = dets.map(d => {
+          const bb = d.boundingBox;
+          // MediaPipe boundingBox is originX/Y width height in pixels
+          return {
+            x: (bb.originX || bb.x || 0) / w,
+            y: (bb.originY || bb.y || 0) / h,
+            w: (bb.width || 0) / w,
+            h: (bb.height || 0) / h
+          };
+        });
+      }
+      // Filter tiny noise
+      boxes = boxes.filter(b => b.w > 0.02 && b.h > 0.02 && b.w < 0.5);
+      return boxes;
+    }
+
+    function assignFacesToSeats(faces, cls) {
+      // Sort faces into a rows×cols grid by position (top→bottom, left→right)
+      const active = cls.seats.filter(s => s.enabled);
+      if (!faces.length || !active.length) return null;
+
+      const n = Math.min(faces.length, active.length);
+      // Cluster into rows by Y centres
+      const withC = faces.map(f => ({ ...f, cx: f.x + f.w / 2, cy: f.y + f.h / 2 }));
+      withC.sort((a, b) => a.cy - b.cy || a.cx - b.cx);
+
+      const rows = cls.rows || 5;
+      const cols = cls.cols || 6;
+      // Greedy: take up to rows*cols faces, bucket by row bands
+      const take = withC.slice(0, Math.min(withC.length, rows * cols));
+      // Assign row index by sorting Y into `rows` quantiles based on seat row count
+      take.sort((a, b) => a.cy - b.cy);
+      const rowBuckets = Array.from({ length: rows }, () => []);
+      take.forEach((f, i) => {
+        const r = Math.min(rows - 1, Math.floor(i / Math.max(1, Math.ceil(take.length / rows))));
+        // Better: use equal count per row from sorted list
+      });
+      // Equal-count row split
+      const perRow = Math.ceil(take.length / rows);
+      const sortedY = [...take].sort((a, b) => a.cy - b.cy);
+      const rowLists = [];
+      for (let r = 0; r < rows; r++) {
+        rowLists.push(sortedY.slice(r * perRow, (r + 1) * perRow).sort((a, b) => a.cx - b.cx));
+      }
+
+      const override = {};
+      let faceIdx = 0;
+      // Map seat grid row-major (row 0 = back / top of image typically)
+      for (let r = 0; r < rows; r++) {
+        const rowFaces = rowLists[r] || [];
+        for (let c = 0; c < cols; c++) {
+          const seat = cls.seats.find(s => s.row === r && s.col === c);
+          if (!seat || !seat.enabled) continue;
+          const f = rowFaces[c];
+          if (!f) continue;
+          // Face box; raise zone is above the face (hands)
+          const raiseH = Math.min(0.14, Math.max(0.06, f.h * 0.9));
+          const raiseY = Math.max(0, f.y - raiseH * 0.85);
+          override[seat.id] = {
+            x: Math.max(0, f.x - f.w * 0.1),
+            y: f.y,
+            w: Math.min(0.25, f.w * 1.2),
+            h: f.h,
+            raiseY,
+            raiseH
+          };
+          faceIdx++;
+        }
+      }
+      return override;
+    }
+
+    async function autoPlaceFromFaces() {
+      const btn = document.getElementById('btnFaceZones');
+      try {
+        if (!appState.webcamActive) {
+          showToast('Start the webcam first, then tap Auto-place from faces.');
+          return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+        showToast('Detecting faces (live only — nothing saved)…');
+        const faces = await detectFacesInVideo();
+        const cls = getCurrentClass();
+        if (!faces.length) {
+          showToast('No faces found — check rear cam, lighting, and that students face the camera.');
+          return;
+        }
+        const override = assignFacesToSeats(faces, cls);
+        if (!override || !Object.keys(override).length) {
+          showToast(`Found ${faces.length} face(s) but could not map to seats.`);
+          return;
+        }
+        appState.faceZoneOverride = override;
+        computeSeatNormalizedBoxes(cls);
+        updateLiveSeatingUI();
+        if (typeof renderScannerCanvas === 'function') renderScannerCanvas();
+        showToast(`Placed zones on ${Object.keys(override).length} face(s). Then Calibrate Hands-Down.`);
+      } catch (e) {
+        console.error(e);
+        showToast(e.message || 'Face detection unavailable on this device/browser.');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Auto-place from faces'; }
+      }
+    }
+
+
+    async function listVideoDevices() {
+      if (!navigator.mediaDevices?.enumerateDevices) return [];
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.filter(d => d.kind === 'videoinput');
+    }
+
+    function buildVideoConstraints(deviceId) {
+      const base = { width: { ideal: 1280 }, height: { ideal: 720 } };
+      if (deviceId) {
+        return { ...base, deviceId: { exact: deviceId } };
+      }
+      // Classroom default: rear / environment cam when available (tablets often start on selfie otherwise)
+      return {
+        ...base,
+        facingMode: appState.preferRearCamera ? { ideal: 'environment' } : { ideal: 'user' }
+      };
+    }
+
+    async function startWebcamWithConstraints(constraints) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: constraints, audio: false });
+      videoEl.srcObject = stream;
+      await videoEl.play();
+      appState.webcamActive = true;
+      baselineFrameData = null;
+      prevFrameData = null;
+      const track = stream.getVideoTracks()[0];
+      const settings = track?.getSettings?.() || {};
+      if (settings.deviceId) appState.videoDeviceId = settings.deviceId;
+      // Labels only appear after permission — refresh list
+      appState.videoDevices = await listVideoDevices();
+      const switchBtn = document.getElementById('btnSwitchCamera');
+      if (switchBtn) {
+        switchBtn.classList.toggle('hidden', appState.videoDevices.length < 2);
+      }
+    }
+
     async function toggleWebcam() {
       const btnLabel = document.getElementById('webcamBtnLabel');
       const feedTitle = document.getElementById('feedTitleText');
       const simGroup = document.getElementById('simControlsGroup');
+      const switchBtn = document.getElementById('btnSwitchCamera');
 
       if (appState.webcamActive) {
         if (videoEl.srcObject) {
-          videoEl.srcObject.getTracks().forEach(t => t.stop());
+          videoEl.srcObject.getTracks().forEach(tr => tr.stop());
           videoEl.srcObject = null;
         }
         appState.webcamActive = false;
@@ -737,28 +985,66 @@
         btnLabel.textContent = 'Start Real Webcam';
         feedTitle.textContent = '30-Seat Simultaneous Zone Scanner (Simulator Active)';
         simGroup.classList.remove('opacity-50');
+        if (switchBtn) switchBtn.classList.add('hidden');
         showToast('Switched to Classroom Simulator Mode');
         return;
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-          audio: false
-        });
-        videoEl.srcObject = stream;
-        await videoEl.play();
-        appState.webcamActive = true;
-        baselineFrameData = null;
-        prevFrameData = null;
-        btnLabel.textContent = 'Switch to Simulator';
+        await startWebcamWithConstraints(buildVideoConstraints(null));
+        btnLabel.textContent = 'Stop Webcam';
         feedTitle.textContent = 'Live Webcam Feed — 30-Seat Simultaneous Zone Scanner';
-        showToast('Webcam connected! Align your seating grid or click Calibrate Hands-Down.');
+        simGroup.classList.add('opacity-50');
+        const camHint = appState.preferRearCamera ? 'rear' : 'front';
+        showToast(`Webcam connected (${camHint} preferred). Use Switch Cam if needed, then Calibrate Hands-Down.`);
       } catch (err) {
-        appState.webcamActive = false;
-        showToast('Webcam unavailable in this frame — running interactive 30-student simulator.');
+        // Fallback: try opposite facingMode, then any camera
+        try {
+          appState.preferRearCamera = !appState.preferRearCamera;
+          await startWebcamWithConstraints(buildVideoConstraints(null));
+          btnLabel.textContent = 'Stop Webcam';
+          feedTitle.textContent = 'Live Webcam Feed — 30-Seat Simultaneous Zone Scanner';
+          simGroup.classList.add('opacity-50');
+          showToast('Webcam connected (fallback camera). Tap Switch Cam to change.');
+        } catch (err2) {
+          appState.webcamActive = false;
+          showToast('Webcam unavailable in this frame — running interactive 30-student simulator.');
+        }
       }
     }
+
+    async function switchCamera() {
+      if (!appState.webcamActive) return;
+      try {
+        let devices = appState.videoDevices;
+        if (!devices.length) devices = await listVideoDevices();
+        if (devices.length < 2) {
+          // Toggle facingMode preference and restart
+          appState.preferRearCamera = !appState.preferRearCamera;
+          if (videoEl.srcObject) {
+            videoEl.srcObject.getTracks().forEach(tr => tr.stop());
+            videoEl.srcObject = null;
+          }
+          await startWebcamWithConstraints(buildVideoConstraints(null));
+          showToast(appState.preferRearCamera ? 'Switched toward rear camera' : 'Switched toward front camera');
+          return;
+        }
+        const ids = devices.map(d => d.deviceId);
+        let idx = ids.indexOf(appState.videoDeviceId);
+        if (idx < 0) idx = 0;
+        const nextId = ids[(idx + 1) % ids.length];
+        const label = devices[(idx + 1) % ids.length].label || 'Camera';
+        if (videoEl.srcObject) {
+          videoEl.srcObject.getTracks().forEach(tr => tr.stop());
+          videoEl.srcObject = null;
+        }
+        await startWebcamWithConstraints(buildVideoConstraints(nextId));
+        showToast('Camera: ' + (label.length > 40 ? label.slice(0, 40) + '…' : label));
+      } catch (e) {
+        showToast('Could not switch camera on this device.');
+      }
+    }
+
 
     function calibrateHandsDownBaseline() {
       if (appState.webcamActive && videoEl.readyState >= 2) {
@@ -1832,6 +2118,8 @@
 
       // Webcam & Detection Mode Controls
       document.getElementById('btnToggleWebcam').addEventListener('click', toggleWebcam);
+      document.getElementById('btnSwitchCamera').addEventListener('click', switchCamera);
+      document.getElementById('btnFaceZones').addEventListener('click', autoPlaceFromFaces);
       document.getElementById('btnCalibrateBaseline').addEventListener('click', calibrateHandsDownBaseline);
       document.getElementById('detectionMethodSelect').addEventListener('change', (e) => {
         appState.detectionMethod = e.target.value;
