@@ -192,7 +192,7 @@
             </div>
           </div>
 
-                      <p id="privacyNote" class="text-[10px] text-slate-500 px-1 pb-1 leading-snug">Each lesson: aim the camera → Scan faces → Calibrate. Live-only — no faces/video saved; only A–D answers are stored.</p>
+                      <p id="privacyNote" class="text-[10px] text-slate-500 px-1 pb-1 leading-snug">V5: Scan faces (auto-calibrates) → raise a hand clearly ABOVE the head for A–D. Live-only; no faces/video saved.</p>
 <!-- Video + Interactive Overlay Canvas Container -->
           <div class="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
             <video id="webcamVideo" class="hidden w-full h-full object-cover" playsinline muted></video>
@@ -619,6 +619,8 @@
       faceSeatsMode: false,
       faceMappedCount: 0,
       faceDetectorReady: false,
+      raiseStreak: {}, // seatId -> consecutive raised frames
+
       currentQuestionNum: 2,
       // Live runtime maps keyed by seat.id
       currentResponses: {},     // { seat_0_0: 'A' | 'B' | 'C' | 'D' }
@@ -871,14 +873,15 @@
       for (let i = 0; i < n; i++) {
         const seat = active[i];
         const f = ranked[i];
-        const pad = Math.min(0.03, f.w * 0.15);
-        const raiseH = Math.min(0.16, Math.max(0.07, f.h * 1.05));
-        const raiseY = Math.max(0, f.y - raiseH * 0.95);
+        const pad = Math.min(0.02, f.w * 0.12);
+        // Hand zone sits fully ABOVE the face (not on torso/desk — that caused false 12/12)
+        const raiseH = Math.min(0.12, Math.max(0.05, f.h * 0.75));
+        const raiseY = Math.max(0, f.y - raiseH - 0.01);
         override[seat.id] = {
           x: Math.max(0, f.x - pad),
-          y: Math.max(0, f.y - pad * 0.5),
-          w: Math.min(0.35, f.w + pad * 2),
-          h: Math.min(0.4, f.h + pad),
+          y: f.y,           // face box for drawing only
+          w: Math.min(0.28, f.w + pad * 2),
+          h: f.h,
           raiseY,
           raiseH,
           fromFace: true
@@ -913,7 +916,8 @@
         computeSeatNormalizedBoxes(cls);
         updateLiveSeatingUI();
         if (typeof renderScannerCanvas === 'function') renderScannerCanvas();
-        showToast(`Lesson seats locked from ${Object.keys(override).length} face(s). Calibrate Hands-Down, then poll.`);
+        calibrateHandsDownBaseline();
+        showToast(`Locked ${Object.keys(override).length} face zone(s). Hands-down baseline taken — keep still, then raise for A–D.`);
       } catch (e) {
         console.error(e);
         showToast(e.message || 'Face detection unavailable on this device/browser.');
@@ -1047,7 +1051,12 @@
         procCtx.drawImage(videoEl, 0, 0, procCanvas.width, procCanvas.height);
         procCtx.restore();
         baselineFrameData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
-        showToast('Calibrated Hands-Down Baseline across all active seat zones!');
+        appState.currentResponses = {};
+        appState.liveHandRaisedMap = {};
+        appState.simRaisedSeats = {};
+        appState.raiseStreak = {};
+        updateLiveSeatingUI();
+        showToast('Calibrated Hands-Down — votes cleared. Raise a hand clearly above the head for A–D.');
       } else {
         appState.simRaisedSeats = {};
         appState.liveHandRaisedMap = {};
@@ -1107,7 +1116,9 @@
             const baseDiff = (Math.abs(r - br) + Math.abs(g - bg) + Math.abs(b - bb)) / 3;
             const motionDiff = (Math.abs(r - pr) + Math.abs(g - pg) + Math.abs(b - pb)) / 3;
 
-            if (baseDiff > 28 || motionDiff > 18) {
+            const baseNeed = appState.faceSeatsMode ? 42 : 28;
+            const motionNeed = appState.faceSeatsMode ? 28 : 18;
+            if (baseDiff > baseNeed || motionDiff > motionNeed) {
               activePixels++;
             }
 
@@ -1122,7 +1133,9 @@
         }
 
         const ratio = totalPixels > 0 ? (activePixels / totalPixels) * 100 : 0;
-        const isRaised = ratio >= (diffThreshold * 0.28);
+        // Face-seat mode: raise zone is small & above head — need clearer motion (cuts false A on desk fidgeting)
+        const raiseFactor = appState.faceSeatsMode ? 0.55 : 0.28;
+        const isRaised = ratio >= (diffThreshold * raiseFactor);
         appState.liveHandRaisedMap[seat.id] = isRaised;
         appState.liveConfidenceMap[seat.id] = Math.min(1, ratio / 40);
 
@@ -1141,13 +1154,19 @@
               }
             }
           } else if (isRaised) {
-            const existingVote = appState.currentResponses[seat.id];
-            if (!existingVote || !appState.protectLockedVotes) {
-              if (existingVote !== appState.activePollOption) {
-                appState.currentResponses[seat.id] = appState.activePollOption;
-                stateChanged = true;
+            const need = appState.faceSeatsMode ? 4 : 1; // ~4 frames sustained raise in face mode
+            appState.raiseStreak[seat.id] = (appState.raiseStreak[seat.id] || 0) + 1;
+            if (appState.raiseStreak[seat.id] >= need) {
+              const existingVote = appState.currentResponses[seat.id];
+              if (!existingVote || !appState.protectLockedVotes) {
+                if (existingVote !== appState.activePollOption) {
+                  appState.currentResponses[seat.id] = appState.activePollOption;
+                  stateChanged = true;
+                }
               }
             }
+          } else {
+            appState.raiseStreak[seat.id] = 0;
           }
         }
       });
