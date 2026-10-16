@@ -131,11 +131,6 @@
                 Hold
               </button>
             </div>
-            <div class="flex items-center gap-1.5 pt-0.5">
-              <button id="btnAdvanceNextOption" type="button" class="flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1 shadow" title="Start scanning the next option (A → B → C → D)">
-                <span id="nextOptBtnLabel">Next: Poll B →</span>
-              </button>
-            </div>
           </div>
 
           <!-- Correct Key & Record Action -->
@@ -1724,7 +1719,6 @@
       const banner = document.getElementById('handsDownOverlayBanner');
       const bannerTitle = document.getElementById('handsDownBannerTitle');
       const bannerSub = document.getElementById('handsDownBannerSub');
-      const nextBtnLabel = document.getElementById('nextOptBtnLabel');
 
       const nextOpt = getNextPollOption(appState.lastScannedOption);
 
@@ -1743,12 +1737,10 @@
       if (opt === 'PAUSE') {
         banner.classList.remove('hidden');
         bannerTitle.textContent = `✋ Hands Down! Option ${appState.lastScannedOption} Votes Locked`;
-        bannerSub.textContent = `Scanner is paused so lowering hands won't trigger false votes. Click "Next: Scan ${nextOpt} →" when ready.`;
+        bannerSub.textContent = `Scanner is paused so lowering hands won't trigger false votes. Tap Poll A–D when ready for the next option.`;
       } else {
         banner.classList.add('hidden');
       }
-
-      nextBtnLabel.textContent = `Next: Scan ${nextOpt} →`;
 
       document.querySelectorAll('.poll-opt-btn').forEach(btn => {
         const bOpt = btn.getAttribute('data-option');
@@ -1796,15 +1788,6 @@
           setActivePollOption(targetOpt);
           updateLiveSeatingUI();
         });
-      });
-
-      document.getElementById('btnAdvanceNextOption').addEventListener('click', () => {
-        const nextOpt = getNextPollOption(appState.lastScannedOption);
-        appState.simRaisedSeats = {};
-        appState.liveHandRaisedMap = {};
-        setActivePollOption(nextOpt);
-        updateLiveSeatingUI();
-        showToast(`Now scanning Option ${nextOpt} — "Who chooses ${nextOpt}?"`);
       });
 
       document.getElementById('lockVotedToggle').addEventListener('change', (e) => {
