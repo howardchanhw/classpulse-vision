@@ -1,0 +1,2050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClassPulse Vision — 30-Student Live Hand-Raise & MCQ Scanner</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 3px;
+    }
+    .seat-pulse {
+      animation: pulseRing 1.4s infinite;
+    }
+    @keyframes pulseRing {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+      70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Header & Navigation -->
+  <header class="bg-slate-900/95 border-b border-slate-800 sticky top-0 z-30 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">ClassPulse Vision</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-medium">30+ Seat Zone CV</span>
+          </div>
+          <p class="text-xs text-slate-400">Fixed-Camera Classroom Hand-Raise &amp; Multiple-Choice Progress Tracker</p>
+        </div>
+      </div>
+
+      <!-- Class Selector & Main Tabs -->
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700">
+          <label for="classSelect" class="text-xs text-slate-400 px-2 font-medium">Class:</label>
+          <select id="classSelect" class="bg-slate-900 text-slate-100 text-xs font-semibold rounded px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-indigo-500">
+          </select>
+        </div>
+
+        <nav class="flex bg-slate-800/90 p-1 rounded-xl border border-slate-700" role="tablist">
+          <button id="tabBtnScanner" data-tab="scanner" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-indigo-600 text-white shadow">
+            Live Scanner &amp; Poll
+          </button>
+          <button id="tabBtnSeating" data-tab="seating" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white">
+            Seating &amp; Camera Grid
+          </button>
+          <button id="tabBtnProgress" data-tab="progress" class="tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white">
+            Progress &amp; History (<span id="savedQCountBadge">0</span>)
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-4">
+
+    <!-- ==================== TAB 1: LIVE SCANNER & POLL ==================== -->
+    <section id="viewScanner" class="space-y-4">
+
+      <!-- Top Lesson & Question Control Bar -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+          <!-- Subject / Question Input -->
+          <div class="lg:col-span-5 flex flex-col sm:flex-row gap-2">
+            <div class="sm:w-36">
+              <label for="subjectInput" class="block text-[11px] font-medium text-slate-400 mb-1">Subject / Lesson</label>
+              <input id="subjectInput" type="text" value="Science - Unit 3" placeholder="e.g. Math, Biology" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-1">
+                <label for="questionPromptInput" class="block text-[11px] font-medium text-slate-400">Question Label <span class="text-slate-500">(Optional — leave blank for spontaneous)</span></label>
+                <button id="btnSpontaneousQuick" type="button" class="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition" title="Start a zero-typing spontaneous question right now">
+                  ⚡ Spontaneous Poll
+                </button>
+              </div>
+              <input id="questionPromptInput" type="text" value="" placeholder="Spontaneous Question (auto-numbered & timestamped if left blank)" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500" />
+            </div>
+          </div>
+
+          <!-- Active Option Polling Selector (A / B / C / D) + Stepper Control -->
+          <div class="lg:col-span-4 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-medium text-slate-400">1. Scan Option ("Raise hand for...")</span>
+              <label class="flex items-center gap-1 text-[10px] text-emerald-300 cursor-pointer" title="Prevent students who already voted in A from being overwritten when lowering hands for B">
+                <input id="lockVotedToggle" type="checkbox" checked class="rounded accent-emerald-500" />
+                <span>Protect Locked Votes</span>
+              </label>
+            </div>
+            <div class="grid grid-cols-5 gap-1.5">
+              <button data-option="A" class="poll-opt-btn py-1.5 rounded-lg text-xs font-bold border transition-all bg-rose-600 border-rose-400 text-white shadow-lg shadow-rose-600/30">
+                Poll A
+              </button>
+              <button data-option="B" class="poll-opt-btn py-1.5 rounded-lg text-xs font-bold border transition-all bg-slate-800 border-slate-700 text-sky-300 hover:bg-slate-700">
+                Poll B
+              </button>
+              <button data-option="C" class="poll-opt-btn py-1.5 rounded-lg text-xs font-bold border transition-all bg-slate-800 border-slate-700 text-emerald-300 hover:bg-slate-700">
+                Poll C
+              </button>
+              <button data-option="D" class="poll-opt-btn py-1.5 rounded-lg text-xs font-bold border transition-all bg-slate-800 border-slate-700 text-amber-300 hover:bg-slate-700">
+                Poll D
+              </button>
+              <button data-option="PAUSE" class="poll-opt-btn py-1.5 rounded-lg text-xs font-semibold border transition-all bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700" title="Stop scanning so students can put hands down">
+                Hold
+              </button>
+            </div>
+            <div class="flex items-center gap-1.5 pt-0.5">
+              <button id="btnLockAndHandsDown" type="button" class="flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 transition flex items-center justify-center gap-1" title="Stop scanning current option and tell students to put hands down">
+                <span>✋ Stop &amp; Lock A (Hands Down)</span>
+              </button>
+              <button id="btnAdvanceNextOption" type="button" class="py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1 shadow" title="Start scanning the next option (A → B → C → D)">
+                <span id="nextOptBtnLabel">Next: Poll B →</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Correct Key & Record Action -->
+          <div class="lg:col-span-3 flex items-end gap-2">
+            <div class="w-24">
+              <label for="correctAnswerSelect" class="block text-[11px] font-medium text-slate-400 mb-1">Correct Key</label>
+              <select id="correctAnswerSelect" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white font-semibold focus:outline-none focus:border-indigo-500">
+                <option value="NONE" selected>Ungraded / Spontaneous</option>
+                <option value="A">Key: Option A</option>
+                <option value="B">Key: Option B</option>
+                <option value="C">Key: Option C</option>
+                <option value="D">Key: Option D</option>
+              </select>
+            </div>
+            <button id="btnRecordQuestion" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2.5 px-3 rounded-lg shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Log Question</span>
+            </button>
+            <button id="btnClearCurrentPoll" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2.5 px-2.5 rounded-lg border border-slate-700 transition" title="Clear current question responses">
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Split View: Left = Live Camera / Simulator Feed with 30 Seat Zones, Right = Live Seating Plan & Tally -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Left Column (7 cols): Camera / Simulator Viewport -->
+        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span id="cameraStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <h2 class="text-sm font-bold text-white" id="feedTitleText">30-Seat Simultaneous Zone Scanner (Simulator Active)</h2>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button id="btnToggleWebcam" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1.5 shadow">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <span id="webcamBtnLabel">Start Real Webcam</span>
+              </button>
+              <button id="btnCalibrateBaseline" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Capture empty/hands-down baseline frame for accurate motion contrast">
+                Calibrate Hands-Down
+              </button>
+              <select id="detectionMethodSelect" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1.5 border border-slate-700 focus:outline-none">
+                <option value="MOTION_ZONE">Mode: Hand-Raise Zone Motion (Sequential A/B/C/D)</option>
+                <option value="COLOR_CARD">Mode: 4-Color Card Instant Scan (Red=A, Blue=B, Green=C, Yellow=D)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Video + Interactive Overlay Canvas Container -->
+          <div class="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
+            <video id="webcamVideo" class="hidden w-full h-full object-cover" playsinline muted></video>
+            <canvas id="scannerCanvas" class="w-full h-full block cursor-pointer"></canvas>
+
+            <!-- Floating HUD Banner inside Video -->
+            <div class="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+              <div class="bg-slate-900/85 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700/80 text-xs flex items-center gap-2">
+                <span class="font-semibold text-slate-300">Status:</span>
+                <span id="hudActivePollText" class="font-bold text-rose-400">Option A (Hands Raised = Vote A)</span>
+              </div>
+              <div class="bg-slate-900/85 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700/80 text-xs text-slate-300 flex items-center gap-2">
+                <span id="scanModeBadge" class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">Sequential Poll</span>
+                <span>Hands Up: <strong id="hudHandsCount" class="text-emerald-400">0</strong>/<span id="hudTotalSeats">30</span></span>
+              </div>
+            </div>
+
+            <!-- Center Classroom Instruction Banner when Paused/Hands Down -->
+            <div id="handsDownOverlayBanner" class="hidden absolute inset-x-6 bottom-4 bg-slate-900/95 backdrop-blur-md border-2 border-amber-400/80 rounded-xl p-3 text-center shadow-2xl pointer-events-none">
+              <p id="handsDownBannerTitle" class="text-sm font-bold text-amber-300">✋ Hands Down! Option A Locked</p>
+              <p id="handsDownBannerSub" class="text-xs text-slate-300 mt-0.5">Scanner is paused so lowering hands won't trigger false votes. Click "Next: Poll B →" when ready.</p>
+            </div>
+          </div>
+
+          <!-- Simulator & Sensitivity Controls Bar -->
+          <div class="bg-slate-800/60 rounded-xl p-3 border border-slate-700/70 flex flex-wrap items-center justify-between gap-3">
+            <div id="simControlsGroup" class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-semibold text-indigo-300">Classroom Simulator:</span>
+              <button id="btnSimWaveRaise" class="px-2.5 py-1 rounded-md text-xs font-medium bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 transition">
+                Simulate Students Raising Hands
+              </button>
+              <button id="btnSimFullClassQuiz" class="px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 transition">
+                Auto-Simulate Full A/B/C/D Class Poll
+              </button>
+              <button id="btnSimHandsDown" class="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 transition">
+                All Hands Down
+              </button>
+            </div>
+
+            <div class="flex items-center gap-3 ml-auto">
+              <div class="flex items-center gap-2">
+                <label for="sensitivitySlider" class="text-xs text-slate-400">Sensitivity:</label>
+                <input id="sensitivitySlider" type="range" min="10" max="90" value="55" class="w-24 accent-indigo-500 cursor-pointer" />
+                <span id="sensitivityVal" class="text-xs font-mono text-slate-300 w-7">55%</span>
+              </div>
+              <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                <input id="mirrorToggle" type="checkbox" checked class="rounded accent-indigo-500" />
+                <span>Mirror Cam</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column (5 cols): Live Interactive Seating Map & Real-Time Option Distribution -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+
+          <!-- Live Seating Response Map -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <h2 class="text-sm font-bold text-white">Live Seating Response Map</h2>
+                  <p class="text-[11px] text-slate-400">Auto-updates from camera zones, or click any desk to manually toggle</p>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs font-bold text-emerald-400" id="respondedCountText">0 / 30</span>
+                  <span class="block text-[10px] text-slate-400">Responded</span>
+                </div>
+              </div>
+
+              <!-- Teacher Front Board Indicator -->
+              <div class="w-full bg-slate-800/80 border border-slate-700/80 rounded-lg py-1 text-center text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
+                Front of Classroom / Teacher Webcam Position
+              </div>
+
+              <!-- Dynamic Seating Grid Container -->
+              <div id="liveSeatingGrid" class="grid gap-1.5 my-1">
+              </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-800 text-[11px]">
+              <div class="flex items-center gap-3">
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-rose-500 inline-block"></span> A (<span id="countA">0</span>)</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-sky-500 inline-block"></span> B (<span id="countB">0</span>)</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span> C (<span id="countC">0</span>)</span>
+                <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-amber-500 inline-block"></span> D (<span id="countD">0</span>)</span>
+              </div>
+              <span class="text-slate-400">Green ring = Hand currently raised</span>
+            </div>
+          </div>
+
+          <!-- Real-Time Option Distribution Mini-Chart -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Live Answer Distribution</h3>
+              <span id="liveAccuracyPreview" class="text-xs font-semibold text-emerald-400">Accuracy: 0%</span>
+            </div>
+            <div class="relative h-36">
+              <canvas id="livePollChart"></canvas>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: SEATING & CAMERA GRID CONFIG ==================== -->
+    <section id="viewSeating" class="hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Left: Class & Room Layout Builder -->
+        <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h2 class="text-base font-bold text-white">Classroom &amp; Seating Arrangement</h2>
+              <p class="text-xs text-slate-400">Save multiple classes with different desk layouts</p>
+            </div>
+            <button id="btnNewClassModal" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">
+              + Add New Class
+            </button>
+          </div>
+
+          <!-- Class Name & Grid Dimensions -->
+          <div class="space-y-3">
+            <div>
+              <label for="editClassNameInput" class="block text-xs font-medium text-slate-300 mb-1">Class / Room Name</label>
+              <input id="editClassNameInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="gridRowsInput" class="block text-xs font-medium text-slate-300 mb-1">Rows (Front to Back): <span id="rowsValLabel" class="font-bold text-indigo-400">5</span></label>
+                <input id="gridRowsInput" type="range" min="2" max="8" value="5" class="w-full accent-indigo-500" />
+              </div>
+              <div>
+                <label for="gridColsInput" class="block text-xs font-medium text-slate-300 mb-1">Columns (Left to Right): <span id="colsValLabel" class="font-bold text-indigo-400">6</span></label>
+                <input id="gridColsInput" type="range" min="2" max="10" value="6" class="w-full accent-indigo-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Camera Perspective Calibration Sliders -->
+          <div class="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/80 space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold text-indigo-300">Fixed-Camera Perspective Alignment</h3>
+              <button id="btnResetPerspective" class="text-[11px] text-slate-400 hover:text-white underline">Reset Default</button>
+            </div>
+            <p class="text-[11px] text-slate-400">Align the 30 detection boxes with how your fixed webcam sees the desks from the front of the room.</p>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="perspTopWidth" class="block text-[11px] text-slate-300">Back Row Width (%)</label>
+                <input id="perspTopWidth" type="range" min="40" max="100" value="72" class="w-full accent-indigo-500" />
+              </div>
+              <div>
+                <label for="perspBottomWidth" class="block text-[11px] text-slate-300">Front Row Width (%)</label>
+                <input id="perspBottomWidth" type="range" min="50" max="100" value="94" class="w-full accent-indigo-500" />
+              </div>
+              <div>
+                <label for="perspTopY" class="block text-[11px] text-slate-300">Back Row Vertical Offset (%)</label>
+                <input id="perspTopY" type="range" min="5" max="45" value="14" class="w-full accent-indigo-500" />
+              </div>
+              <div>
+                <label for="perspBottomY" class="block text-[11px] text-slate-300">Front Row Vertical Offset (%)</label>
+                <input id="perspBottomY" type="range" min="60" max="98" value="92" class="w-full accent-indigo-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Roster Bulk Paste -->
+          <div class="space-y-2 pt-2 border-t border-slate-800">
+            <label for="bulkRosterTextarea" class="block text-xs font-medium text-slate-300">Bulk Paste Student Names (one per line or comma-separated)</label>
+            <textarea id="bulkRosterTextarea" rows="3" placeholder="Alice Chan, Ben Wong, Chloe Lam..." class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"></textarea>
+            <button id="btnApplyRoster" class="w-full py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition">
+              Apply Names to Active Seats
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Interactive Desk Editor (Rename Students or Disable Empty/Aisle Desks) -->
+        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl">
+          <div>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 class="text-base font-bold text-white">Interactive Seating Plan Editor</h2>
+                <p class="text-xs text-slate-400">Edit student names directly or toggle seats On/Off to create aisles and custom group layouts</p>
+              </div>
+              <span id="activeSeatCountEditor" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">30 Active Seats</span>
+            </div>
+
+            <div class="w-full bg-slate-800/80 border border-slate-700 rounded-lg py-1.5 text-center text-xs font-semibold text-slate-400 mb-3">
+              Front of Classroom (Teacher / Fixed Webcam)
+            </div>
+
+            <div id="seatingEditorGrid" class="grid gap-2 max-h-[460px] overflow-y-auto custom-scrollbar p-1">
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+            <span>Changes save automatically for each class profile.</span>
+            <button id="btnEnableAllSeats" class="text-indigo-400 hover:text-indigo-300 font-medium">Enable All Desks in Grid</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: PROGRESS & HISTORY ==================== -->
+    <section id="viewProgress" class="hidden space-y-4">
+
+      <!-- Top Summary KPI Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <span class="text-xs text-slate-400 font-medium">Questions Logged (This Class)</span>
+          <p id="kpiTotalQuestions" class="text-2xl font-bold text-white mt-1">0</p>
+          <span class="text-[11px] text-indigo-400">Across lessons &amp; subjects</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <span class="text-xs text-slate-400 font-medium">Avg Class Participation</span>
+          <p id="kpiAvgParticipation" class="text-2xl font-bold text-emerald-400 mt-1">0%</p>
+          <span class="text-[11px] text-slate-400">Hand-raise response rate</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <span class="text-xs text-slate-400 font-medium">Avg MCQ Accuracy</span>
+          <p id="kpiAvgAccuracy" class="text-2xl font-bold text-sky-400 mt-1">0%</p>
+          <span class="text-[11px] text-slate-400">On graded questions</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <span class="text-xs text-slate-400 font-medium">Export Class Data</span>
+          <div class="flex gap-2 mt-2">
+            <button id="btnExportCSV" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2 px-3 rounded-lg transition">
+              Download CSV
+            </button>
+            <button id="btnCopyReport" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 px-3 rounded-lg border border-slate-700 transition">
+              Copy Summary
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Student Longitudinal Table + Question History Log -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Student Mastery & Participation Roster (7 cols) -->
+        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-sm font-bold text-white">Student Learning Progress &amp; Participation</h2>
+              <p class="text-xs text-slate-400">Cumulative tracking across all questions logged for this class</p>
+            </div>
+            <input id="studentSearchInput" type="text" placeholder="Filter student..." class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <div class="overflow-x-auto max-h-[420px] custom-scrollbar">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="bg-slate-800/90 text-slate-300 sticky top-0">
+                <tr>
+                  <th class="py-2.5 px-3 font-semibold">Seat</th>
+                  <th class="py-2.5 px-3 font-semibold">Student Name</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">Hands Raised</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">Participation</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">Correct</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">Accuracy</th>
+                  <th class="py-2.5 px-3 font-semibold">Recent Answers</th>
+                </tr>
+              </thead>
+              <tbody id="studentProgressTableBody" class="divide-y divide-slate-800">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Question Log & Lesson Breakdown (5 cols) -->
+        <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-sm font-bold text-white">Recorded Lesson Questions</h2>
+                <p class="text-xs text-slate-400">Click any logged question to review or load sample data</p>
+              </div>
+              <button id="btnLoadDemoHistory" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold underline">
+                + Load Sample Lesson Data
+              </button>
+            </div>
+
+            <div id="questionHistoryList" class="space-y-2.5 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
+            </div>
+          </div>
+
+          <div class="pt-3 mt-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+            <span>Stored locally in your browser</span>
+            <button id="btnClearHistory" class="text-rose-400 hover:text-rose-300 font-medium">Clear Class History</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Add New Class Modal -->
+  <div id="newClassModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white">Create New Class Profile</h3>
+        <button id="btnCloseNewClassModal" class="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label for="newClassNameModalInput" class="block text-xs font-medium text-slate-300 mb-1">Class Name &amp; Subject</label>
+          <input id="newClassNameModalInput" type="text" placeholder="e.g. Class 4A - Mathematics" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="newClassRowsModalInput" class="block text-xs font-medium text-slate-300 mb-1">Rows</label>
+            <input id="newClassRowsModalInput" type="number" min="2" max="8" value="5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+          </div>
+          <div>
+            <label for="newClassColsModalInput" class="block text-xs font-medium text-slate-300 mb-1">Columns</label>
+            <input id="newClassColsModalInput" type="number" min="2" max="10" value="6" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white" />
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button id="btnCancelNewClass" class="px-3 py-2 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button id="btnConfirmNewClass" class="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-500">Create Class</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastBanner" class="fixed bottom-4 right-4 z-50 hidden bg-slate-900 border border-indigo-500/50 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-medium flex items-center gap-2">
+    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+    <span id="toastText">Saved!</span>
+  </div>
+
+  <script>
+    // =========================================================================
+    // STATE MANAGEMENT & DEFAULT 30-STUDENT CLASS PROFILES
+    // =========================================================================
+    const STORAGE_KEY = 'classpulse_vision_v1';
+
+    const DEFAULT_STUDENT_NAMES_30 = [
+      'Alice Chan', 'Brandon Lee', 'Chloe Wong', 'Daniel Ho', 'Emma Lam', 'Felix Ng',
+      'Grace Cheung', 'Henry Kwok', 'Iris Yip', 'Jason Chow', 'Katie Tang', 'Leo Mak',
+      'Mia Leung', 'Noah Fung', 'Olivia Tse', 'Lucas Law', 'Sophia Poon', 'Ethan Lau',
+      'Ava Tsang', 'Mason Siu', 'Zoe Ko', 'Logan Yuen', 'Lily Chui', 'Jacob Wan',
+      'Ella Tam', 'Ryan Man', 'Maya Sin', 'Nathan Au', 'ruby Lo', 'Caleb Hui'
+    ];
+
+    function buildSeats(rows, cols, customNames = []) {
+      const seats = [];
+      let idx = 0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const seatCode = String.fromCharCode(65 + r) + (c + 1);
+          const defaultName = customNames[idx] || DEFAULT_STUDENT_NAMES_30[idx] || ('Student ' + (idx + 1));
+          seats.push({
+            id: 'seat_' + r + '_' + c,
+            row: r,
+            col: c,
+            code: seatCode,
+            name: defaultName,
+            enabled: true
+          });
+          idx++;
+        }
+      }
+      return seats;
+    }
+
+    const initialClasses = [
+      {
+        id: 'class_1a',
+        name: 'Class 1A — Standard 30 (5×6)',
+        rows: 5,
+        cols: 6,
+        perspective: { topWidth: 72, bottomWidth: 94, topY: 14, bottomY: 92 },
+        seats: buildSeats(5, 6),
+        history: [
+          {
+            id: 'q_demo_1',
+            timestamp: '09:15 AM',
+            subject: 'Science - Unit 3',
+            prompt: 'Which gas do plants absorb during photosynthesis?',
+            correctOption: 'B',
+            responses: {
+              seat_0_0: 'B', seat_0_1: 'B', seat_0_2: 'A', seat_0_3: 'B', seat_0_4: 'B', seat_0_5: 'B',
+              seat_1_0: 'B', seat_1_1: 'C', seat_1_2: 'B', seat_1_3: 'B', seat_1_4: 'B', seat_1_5: 'B',
+              seat_2_0: 'B', seat_2_1: 'B', seat_2_2: 'B', seat_2_3: 'D', seat_2_4: 'B', seat_2_5: 'B',
+              seat_3_0: 'A', seat_3_1: 'B', seat_3_2: 'B', seat_3_3: 'B', seat_3_4: 'B', seat_3_5: 'C',
+              seat_4_0: 'B', seat_4_1: 'B', seat_4_2: 'B', seat_4_3: 'B', seat_4_4: 'B', seat_4_5: 'B'
+            }
+          }
+        ]
+      },
+      {
+        id: 'class_2b',
+        name: 'Class 2B — Group Tables (6×5)',
+        rows: 6,
+        cols: 5,
+        perspective: { topWidth: 76, bottomWidth: 95, topY: 12, bottomY: 92 },
+        seats: buildSeats(6, 5),
+        history: []
+      }
+    ];
+
+    let appState = {
+      classes: initialClasses,
+      currentClassId: 'class_1a',
+      activeTab: 'scanner',
+      activePollOption: 'A', // 'A', 'B', 'C', 'D', 'PAUSE'
+      lastScannedOption: 'A',
+      protectLockedVotes: true,
+      detectionMethod: 'MOTION_ZONE', // 'MOTION_ZONE' or 'COLOR_CARD'
+      sensitivity: 55,
+      mirrorCam: true,
+      webcamActive: false,
+      currentQuestionNum: 2,
+      // Live runtime maps keyed by seat.id
+      currentResponses: {},     // { seat_0_0: 'A' | 'B' | 'C' | 'D' }
+      liveHandRaisedMap: {},    // { seat_0_0: true/false }
+      liveConfidenceMap: {},    // { seat_0_0: 0..1 }
+      simRaisedSeats: {}        // { seat_0_0: { raised: true, cardColor: 'A' } }
+    };
+
+    // Load saved state safely
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.classes) && parsed.classes.length > 0) {
+          appState.classes = parsed.classes;
+          appState.currentClassId = parsed.currentClassId || parsed.classes[0].id;
+        }
+      }
+    } catch (e) {
+      // Ignore storage access errors in sandboxed iframes
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          classes: appState.classes,
+          currentClassId: appState.currentClassId
+        }));
+      } catch (e) {
+        // Ignore storage errors
+      }
+    }
+
+    function getCurrentClass() {
+      return appState.classes.find(c => c.id === appState.currentClassId) || appState.classes[0];
+    }
+
+    function showToast(msg) {
+      const banner = document.getElementById('toastBanner');
+      const text = document.getElementById('toastText');
+      text.textContent = msg;
+      banner.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 2800);
+    }
+
+    // =========================================================================
+    // COMPUTER VISION & 30-SEAT ZONE ENGINE
+    // =========================================================================
+    const videoEl = document.getElementById('webcamVideo');
+    const canvasEl = document.getElementById('scannerCanvas');
+    const ctx = canvasEl.getContext('2d');
+
+    // Offscreen low-res buffer for fast 30-seat pixel diff & color analysis
+    const procCanvas = document.createElement('canvas');
+    procCanvas.width = 320;
+    procCanvas.height = 180;
+    const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
+    let baselineFrameData = null;
+    let prevFrameData = null;
+    let seatBoxCoords = {}; // { seatId: { x, y, w, h, raiseY, raiseH } } in normalized 0..1 coords
+
+    // Compute perspective-aligned bounding box for each seat (row, col)
+    function computeSeatNormalizedBoxes(cls) {
+      const { rows, cols, perspective } = cls;
+      const topW = (perspective?.topWidth || 72) / 100;
+      const botW = (perspective?.bottomWidth || 94) / 100;
+      const topY = (perspective?.topY || 14) / 100;
+      const botY = (perspective?.bottomY || 92) / 100;
+
+      const totalH = Math.max(0.25, botY - topY);
+      const rowH = totalH / rows;
+      const boxes = {};
+
+      cls.seats.forEach(seat => {
+        if (!seat.enabled) return;
+        // Row 0 is front row (bottom of camera view) OR back row?
+        // In a fixed camera at the front of the room looking out at students:
+        // Front row (Row A = row 0) is lower in the camera frame (closer to camera),
+        // Back row (Row E = row rows-1) is higher up in the camera frame!
+        // Let's map Row 0 (Front Row A) to bottom of frame, and Back Row to top of frame,
+        // OR keep top-to-bottom matching the teacher's eye view. Let's make Row 0 = Top (Front in seating chart) or give clear labels.
+        // Actually, when a camera at the front looks at the class, Row 1 (front) is at the bottom of the video, or if elevated looking down, Row 1 is at the bottom.
+        // However, on the screen, matching the seating chart top-to-bottom (Row A at top, Row E at bottom) is super intuitive to read!
+        // Let's interpolate width from top (Row A) to bottom (Row E) smoothly:
+        const t = (seat.row + 0.5) / rows;
+        const rowWidth = topW + (botW - topW) * t;
+        const rowLeft = (1 - rowWidth) / 2;
+        const cellW = rowWidth / cols;
+        const cellX = rowLeft + seat.col * cellW;
+        const cellY = topY + seat.row * rowH;
+
+        const padX = cellW * 0.08;
+        const padY = rowH * 0.08;
+        const x = cellX + padX;
+        const y = cellY + padY;
+        const w = cellW - padX * 2;
+        const h = rowH - padY * 2;
+
+        // Upper 48% of each seat box is the "Hand-Raise Trigger Zone" (above shoulder height)
+        boxes[seat.id] = {
+          x,
+          y,
+          w,
+          h,
+          raiseY: y,
+          raiseH: h * 0.52
+        };
+      });
+      seatBoxCoords = boxes;
+      return boxes;
+    }
+
+    // Start or Stop Real Webcam
+    async function toggleWebcam() {
+      const btnLabel = document.getElementById('webcamBtnLabel');
+      const feedTitle = document.getElementById('feedTitleText');
+      const simGroup = document.getElementById('simControlsGroup');
+
+      if (appState.webcamActive) {
+        if (videoEl.srcObject) {
+          videoEl.srcObject.getTracks().forEach(t => t.stop());
+          videoEl.srcObject = null;
+        }
+        appState.webcamActive = false;
+        baselineFrameData = null;
+        prevFrameData = null;
+        btnLabel.textContent = 'Start Real Webcam';
+        feedTitle.textContent = '30-Seat Simultaneous Zone Scanner (Simulator Active)';
+        simGroup.classList.remove('opacity-50');
+        showToast('Switched to Classroom Simulator Mode');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+          audio: false
+        });
+        videoEl.srcObject = stream;
+        await videoEl.play();
+        appState.webcamActive = true;
+        baselineFrameData = null;
+        prevFrameData = null;
+        btnLabel.textContent = 'Switch to Simulator';
+        feedTitle.textContent = 'Live Webcam Feed — 30-Seat Simultaneous Zone Scanner';
+        showToast('Webcam connected! Align your seating grid or click Calibrate Hands-Down.');
+      } catch (err) {
+        appState.webcamActive = false;
+        showToast('Webcam unavailable in this frame — running interactive 30-student simulator.');
+      }
+    }
+
+    function calibrateHandsDownBaseline() {
+      if (appState.webcamActive && videoEl.readyState >= 2) {
+        procCtx.save();
+        if (appState.mirrorCam) {
+          procCtx.translate(procCanvas.width, 0);
+          procCtx.scale(-1, 1);
+        }
+        procCtx.drawImage(videoEl, 0, 0, procCanvas.width, procCanvas.height);
+        procCtx.restore();
+        baselineFrameData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
+        showToast('Calibrated Hands-Down Baseline across all active seat zones!');
+      } else {
+        appState.simRaisedSeats = {};
+        appState.liveHandRaisedMap = {};
+        updateLiveSeatingUI();
+        showToast('Simulator baseline calibrated (all hands reset down).');
+      }
+    }
+
+    // Analyze real webcam pixels inside all 30 seat upper-zones simultaneously
+    function processWebcamZones(cls) {
+      if (!videoEl || videoEl.readyState < 2) return;
+      const pw = procCanvas.width;
+      const ph = procCanvas.height;
+
+      procCtx.save();
+      if (appState.mirrorCam) {
+        procCtx.translate(pw, 0);
+        procCtx.scale(-1, 1);
+      }
+      procCtx.drawImage(videoEl, 0, 0, pw, ph);
+      procCtx.restore();
+
+      const frame = procCtx.getImageData(0, 0, pw, ph).data;
+      if (!baselineFrameData) {
+        baselineFrameData = new Uint8ClampedArray(frame);
+      }
+      if (!prevFrameData) {
+        prevFrameData = new Uint8ClampedArray(frame);
+      }
+
+      // Threshold scales inversely with sensitivity (higher sensitivity = lower threshold)
+      const diffThreshold = Math.max(12, 95 - appState.sensitivity * 0.8);
+      let stateChanged = false;
+
+      cls.seats.forEach(seat => {
+        if (!seat.enabled) return;
+        const box = seatBoxCoords[seat.id];
+        if (!box) return;
+
+        const startX = Math.max(0, Math.floor(box.x * pw));
+        const endX = Math.min(pw - 1, Math.floor((box.x + box.w) * pw));
+        const startY = Math.max(0, Math.floor(box.raiseY * ph));
+        const endY = Math.min(ph - 1, Math.floor((box.raiseY + box.raiseH) * ph));
+
+        let activePixels = 0;
+        let totalPixels = 0;
+        let countR = 0, countB = 0, countG = 0, countY = 0;
+
+        for (let y = startY; y <= endY; y += 2) {
+          for (let x = startX; x <= endX; x += 2) {
+            const idx = (y * pw + x) * 4;
+            const r = frame[idx], g = frame[idx + 1], b = frame[idx + 2];
+            const br = baselineFrameData[idx], bg = baselineFrameData[idx + 1], bb = baselineFrameData[idx + 2];
+            const pr = prevFrameData[idx], pg = prevFrameData[idx + 1], pb = prevFrameData[idx + 2];
+
+            const baseDiff = (Math.abs(r - br) + Math.abs(g - bg) + Math.abs(b - bb)) / 3;
+            const motionDiff = (Math.abs(r - pr) + Math.abs(g - pg) + Math.abs(b - pb)) / 3;
+
+            if (baseDiff > 28 || motionDiff > 18) {
+              activePixels++;
+            }
+
+            if (appState.detectionMethod === 'COLOR_CARD') {
+              if (r > 150 && r > g * 1.35 && r > b * 1.35) countR++;
+              else if (b > 135 && b > r * 1.25 && b > g * 1.15) countB++;
+              else if (g > 135 && g > r * 1.2 && g > b * 1.2) countG++;
+              else if (r > 160 && g > 150 && b < 100) countY++;
+            }
+            totalPixels++;
+          }
+        }
+
+        const ratio = totalPixels > 0 ? (activePixels / totalPixels) * 100 : 0;
+        const isRaised = ratio >= (diffThreshold * 0.28);
+        appState.liveHandRaisedMap[seat.id] = isRaised;
+        appState.liveConfidenceMap[seat.id] = Math.min(1, ratio / 40);
+
+        if (appState.activePollOption !== 'PAUSE') {
+          if (appState.detectionMethod === 'COLOR_CARD') {
+            const minCardPixels = Math.max(4, totalPixels * 0.12);
+            const maxColor = Math.max(countR, countB, countG, countY);
+            if (maxColor >= minCardPixels) {
+              let detectedOpt = 'A';
+              if (maxColor === countB) detectedOpt = 'B';
+              else if (maxColor === countG) detectedOpt = 'C';
+              else if (maxColor === countY) detectedOpt = 'D';
+              if (appState.currentResponses[seat.id] !== detectedOpt) {
+                appState.currentResponses[seat.id] = detectedOpt;
+                stateChanged = true;
+              }
+            }
+          } else if (isRaised) {
+            const existingVote = appState.currentResponses[seat.id];
+            if (!existingVote || !appState.protectLockedVotes) {
+              if (existingVote !== appState.activePollOption) {
+                appState.currentResponses[seat.id] = appState.activePollOption;
+                stateChanged = true;
+              }
+            }
+          }
+        }
+      });
+
+      prevFrameData.set(frame);
+      if (stateChanged) {
+        updateLiveSeatingUI();
+      }
+    }
+
+    // Render camera feed or simulated 30-student classroom + seat detection overlays
+    function renderScannerCanvas() {
+      const cls = getCurrentClass();
+      computeSeatNormalizedBoxes(cls);
+
+      const rect = canvasEl.getBoundingClientRect();
+      if (canvasEl.width !== Math.floor(rect.width) || canvasEl.height !== Math.floor(rect.height)) {
+        canvasEl.width = Math.max(480, Math.floor(rect.width));
+        canvasEl.height = Math.max(270, Math.floor(rect.height));
+      }
+      const W = canvasEl.width;
+      const H = canvasEl.height;
+
+      ctx.clearRect(0, 0, W, H);
+
+      if (appState.webcamActive && videoEl.readyState >= 2) {
+        processWebcamZones(cls);
+        ctx.save();
+        if (appState.mirrorCam) {
+          ctx.translate(W, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(videoEl, 0, 0, W, H);
+        ctx.restore();
+        // Subtle dark tint for clear HUD contrast
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
+        ctx.fillRect(0, 0, W, H);
+      } else {
+        // Draw simulated classroom perspective background
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#0f172a');
+        grad.addColorStop(1, '#1e293b');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Perspective floor lines
+        ctx.strokeStyle = 'rgba(71, 85, 105, 0.25)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 6; i++) {
+          const topX = W * (0.15 + (i / 6) * 0.7);
+          const botX = W * (0.03 + (i / 6) * 0.94);
+          ctx.beginPath();
+          ctx.moveTo(topX, H * 0.12);
+          ctx.lineTo(botX, H * 0.95);
+          ctx.stroke();
+        }
+      }
+
+      // Count currently raised hands
+      let handsNow = 0;
+      const optionColors = {
+        A: { stroke: '#f43f5e', fill: 'rgba(244, 63, 94, 0.24)', badge: '#e11d48' },
+        B: { stroke: '#0ea5e9', fill: 'rgba(14, 165, 233, 0.24)', badge: '#0284c7' },
+        C: { stroke: '#10b981', fill: 'rgba(16, 185, 129, 0.24)', badge: '#059669' },
+        D: { stroke: '#f59e0b', fill: 'rgba(245, 158, 11, 0.24)', badge: '#d97706' }
+      };
+
+      const now = performance.now() * 0.005;
+
+      cls.seats.forEach(seat => {
+        if (!seat.enabled) return;
+        const box = seatBoxCoords[seat.id];
+        if (!box) return;
+
+        const bx = box.x * W;
+        const by = box.y * H;
+        const bw = box.w * W;
+        const bh = box.h * H;
+        const rHeight = box.raiseH * H;
+
+        const isSimRaised = !appState.webcamActive && Boolean(appState.simRaisedSeats[seat.id]?.raised);
+        const isRaised = appState.webcamActive ? Boolean(appState.liveHandRaisedMap[seat.id]) : isSimRaised;
+        if (isRaised) handsNow++;
+
+        const recordedVote = appState.currentResponses[seat.id];
+        const optStyle = recordedVote ? optionColors[recordedVote] : null;
+
+        // Draw Simulated Student Avatar inside box when in Simulator mode
+        if (!appState.webcamActive) {
+          const cx = bx + bw * 0.5;
+          const cy = by + bh * 0.68;
+          const headR = Math.min(bw, bh) * 0.14;
+
+          // Desk edge
+          ctx.fillStyle = 'rgba(51, 65, 85, 0.55)';
+          ctx.fillRect(bx + bw * 0.12, by + bh * 0.78, bw * 0.76, bh * 0.16);
+
+          // Shoulders
+          ctx.fillStyle = recordedVote ? optStyle.stroke : '#64748b';
+          ctx.beginPath();
+          ctx.arc(cx, cy + headR * 1.5, headR * 1.6, Math.PI, 0);
+          ctx.fill();
+
+          // Head
+          ctx.fillStyle = '#cbd5e1';
+          ctx.beginPath();
+          ctx.arc(cx, cy - headR * 0.2, headR, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Raised hand animation in Upper Trigger Zone
+          if (isRaised) {
+            const waveOffset = Math.sin(now + seat.col + seat.row) * 2.5;
+            const handX = cx + headR * 1.35;
+            const handY = by + rHeight * 0.42 + waveOffset;
+
+            // Arm line
+            ctx.strokeStyle = '#34d399';
+            ctx.lineWidth = Math.max(2.5, headR * 0.45);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(cx + headR * 1.1, cy + headR * 0.6);
+            ctx.lineTo(handX, handY);
+            ctx.stroke();
+
+            // Palm or Color Card
+            if (appState.detectionMethod === 'COLOR_CARD') {
+              const cardOpt = appState.simRaisedSeats[seat.id]?.cardColor || appState.activePollOption || 'A';
+              ctx.fillStyle = (optionColors[cardOpt] || optionColors.A).stroke;
+              ctx.fillRect(handX - headR * 0.8, handY - headR * 0.9, headR * 1.6, headR * 1.4);
+            } else {
+              ctx.fillStyle = '#fde047';
+              ctx.beginPath();
+              ctx.arc(handX, handY, headR * 0.65, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        // Seat Zone Outer Frame
+        ctx.strokeStyle = isRaised ? '#22c55e' : (optStyle ? optStyle.stroke : 'rgba(148, 163, 184, 0.45)');
+        ctx.lineWidth = isRaised ? 2.2 : 1.2;
+        ctx.strokeRect(bx, by, bw, bh);
+
+        // Upper Hand-Raise Trigger Sub-Zone dashed line
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = isRaised ? 'rgba(34, 197, 94, 0.9)' : 'rgba(99, 102, 241, 0.45)';
+        ctx.beginPath();
+        ctx.moveTo(bx, by + rHeight);
+        ctx.lineTo(bx + bw, by + rHeight);
+        ctx.stroke();
+        ctx.restore();
+
+        if (isRaised) {
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.18)';
+          ctx.fillRect(bx, by, bw, rHeight);
+        } else if (optStyle) {
+          ctx.fillStyle = optStyle.fill;
+          ctx.fillRect(bx, by, bw, bh);
+        }
+
+        // Seat Code & Student First Name label
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+        ctx.fillRect(bx + 1, by + bh - 16, Math.min(bw - 2, 74), 15);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '600 10px Inter, sans-serif';
+        const shortName = seat.name.split(' ')[0];
+        ctx.fillText(seat.code + ' ' + shortName, bx + 4, by + bh - 5);
+
+        // Recorded Option Badge in top-right corner of seat box
+        if (recordedVote && optStyle) {
+          const badgeW = 18;
+          const badgeH = 16;
+          ctx.fillStyle = optStyle.badge;
+          ctx.fillRect(bx + bw - badgeW - 2, by + 2, badgeW, badgeH);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px Inter, sans-serif';
+          ctx.fillText(recordedVote, bx + bw - badgeW + 4, by + 13);
+        }
+      });
+
+      document.getElementById('hudHandsCount').textContent = String(handsNow);
+      const activeSeatsTotal = cls.seats.filter(s => s.enabled).length;
+      document.getElementById('hudTotalSeats').textContent = String(activeSeatsTotal);
+
+      requestAnimationFrame(renderScannerCanvas);
+    }
+
+    // Handle clicking a seat directly on the camera canvas to simulate/toggle hand raise
+    canvasEl.addEventListener('click', (e) => {
+      const rect = canvasEl.getBoundingClientRect();
+      const normX = (e.clientX - rect.left) / rect.width;
+      const normY = (e.clientY - rect.top) / rect.height;
+      const cls = getCurrentClass();
+
+      for (const seat of cls.seats) {
+        if (!seat.enabled) continue;
+        const b = seatBoxCoords[seat.id];
+        if (!b) continue;
+        if (normX >= b.x && normX <= b.x + b.w && normY >= b.y && normY <= b.y + b.h) {
+          toggleStudentHandOrVote(seat.id);
+          break;
+        }
+      }
+    });
+
+    function toggleStudentHandOrVote(seatId) {
+      const targetOpt = appState.activePollOption === 'PAUSE' ? 'A' : appState.activePollOption;
+      const currentlyRaised = Boolean(appState.simRaisedSeats[seatId]?.raised);
+
+      if (!currentlyRaised) {
+        appState.simRaisedSeats[seatId] = { raised: true, cardColor: targetOpt };
+        appState.liveHandRaisedMap[seatId] = true;
+        if (appState.activePollOption !== 'PAUSE') {
+          appState.currentResponses[seatId] = targetOpt;
+        }
+      } else {
+        appState.simRaisedSeats[seatId] = { raised: false, cardColor: null };
+        appState.liveHandRaisedMap[seatId] = false;
+      }
+      updateLiveSeatingUI();
+    }
+
+    // =========================================================================
+    // LIVE SEATING GRID & CHART UPDATES
+    // =========================================================================
+    let liveChartInstance = null;
+
+    function initLiveChart() {
+      const chartCanvas = document.getElementById('livePollChart');
+      liveChartInstance = new Chart(chartCanvas, {
+        type: 'bar',
+        data: {
+          labels: ['Option A', 'Option B', 'Option C', 'Option D', 'No Answer'],
+          datasets: [{
+            label: 'Students',
+            data: [0, 0, 0, 0, 30],
+            backgroundColor: [
+              'rgba(244, 63, 94, 0.85)',
+              'rgba(14, 165, 233, 0.85)',
+              'rgba(16, 185, 129, 0.85)',
+              'rgba(245, 158, 11, 0.85)',
+              'rgba(71, 85, 105, 0.5)'
+            ],
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: '#94a3b8', stepSize: 5, font: { size: 10 } },
+              grid: { color: 'rgba(51, 65, 85, 0.4)' }
+            },
+            x: {
+              ticks: { color: '#cbd5e1', font: { size: 10, weight: '600' } },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function updateLiveSeatingUI() {
+      const cls = getCurrentClass();
+      const gridEl = document.getElementById('liveSeatingGrid');
+      gridEl.style.gridTemplateColumns = `repeat(${cls.cols}, minmax(0, 1fr))`;
+
+      const counts = { A: 0, B: 0, C: 0, D: 0, NONE: 0 };
+      let activeSeatTotal = 0;
+      let respondedTotal = 0;
+
+      const badgeStyleMap = {
+        A: 'bg-rose-600/30 border-rose-500 text-rose-200',
+        B: 'bg-sky-600/30 border-sky-500 text-sky-200',
+        C: 'bg-emerald-600/30 border-emerald-500 text-emerald-200',
+        D: 'bg-amber-600/30 border-amber-500 text-amber-200'
+      };
+
+      gridEl.innerHTML = '';
+
+      cls.seats.forEach(seat => {
+        if (!seat.enabled) {
+          const emptyCell = document.createElement('div');
+          emptyCell.className = 'h-12 rounded-lg border border-dashed border-slate-800/60 bg-slate-950/30 flex items-center justify-center text-[10px] text-slate-700';
+          emptyCell.textContent = 'Aisle';
+          gridEl.appendChild(emptyCell);
+          return;
+        }
+
+        activeSeatTotal++;
+        const resp = appState.currentResponses[seat.id];
+        const isRaised = appState.webcamActive
+          ? Boolean(appState.liveHandRaisedMap[seat.id])
+          : Boolean(appState.simRaisedSeats[seat.id]?.raised);
+
+        if (resp && counts[resp] !== undefined) {
+          counts[resp]++;
+          respondedTotal++;
+        } else {
+          counts.NONE++;
+        }
+
+        const btn = document.createElement('button');
+        const colorClasses = resp
+          ? badgeStyleMap[resp]
+          : 'bg-slate-800/90 border-slate-700 text-slate-300 hover:border-slate-500';
+        const ringClass = isRaised ? 'ring-2 ring-emerald-400 seat-pulse' : '';
+
+        btn.className = `h-12 rounded-lg border px-1.5 py-1 flex flex-col justify-between text-left transition ${colorClasses} ${ringClass}`;
+        btn.title = `${seat.code}: ${seat.name} — Click to cycle vote (A → B → C → D → Clear)`;
+
+        const firstName = seat.name.split(' ')[0];
+        btn.innerHTML = `
+          <div class="flex items-center justify-between w-full">
+            <span class="text-[10px] font-mono opacity-75">${seat.code}</span>
+            <span class="text-[10px] font-bold px-1 rounded ${resp ? 'bg-slate-950/60 text-white' : 'text-slate-500'}">${resp || '—'}</span>
+          </div>
+          <div class="text-[11px] font-semibold truncate w-full">${firstName}</div>
+        `;
+
+        btn.addEventListener('click', () => {
+          const order = [null, 'A', 'B', 'C', 'D'];
+          const currIdx = order.indexOf(appState.currentResponses[seat.id] || null);
+          const nextOpt = order[(currIdx + 1) % order.length];
+          if (nextOpt) {
+            appState.currentResponses[seat.id] = nextOpt;
+          } else {
+            delete appState.currentResponses[seat.id];
+          }
+          updateLiveSeatingUI();
+        });
+
+        gridEl.appendChild(btn);
+      });
+
+      document.getElementById('countA').textContent = String(counts.A);
+      document.getElementById('countB').textContent = String(counts.B);
+      document.getElementById('countC').textContent = String(counts.C);
+      document.getElementById('countD').textContent = String(counts.D);
+      document.getElementById('respondedCountText').textContent = `${respondedTotal} / ${activeSeatTotal}`;
+
+      const correctKey = document.getElementById('correctAnswerSelect').value;
+      const accEl = document.getElementById('liveAccuracyPreview');
+      if (correctKey === 'NONE') {
+        accEl.textContent = `Survey Mode (${respondedTotal} votes)`;
+      } else {
+        const rightCount = counts[correctKey] || 0;
+        const pct = respondedTotal > 0 ? Math.round((rightCount / respondedTotal) * 100) : 0;
+        accEl.textContent = `Correct (${correctKey}): ${rightCount}/${respondedTotal} (${pct}%)`;
+      }
+
+      if (liveChartInstance) {
+        liveChartInstance.data.datasets[0].data = [counts.A, counts.B, counts.C, counts.D, counts.NONE];
+        liveChartInstance.update();
+      }
+    }
+
+    // =========================================================================
+    // SIMULATOR HELPERS (FOR TESTING 30 STUDENTS IMMEDIATELY)
+    // =========================================================================
+    function simulateWaveForCurrentOption() {
+      const cls = getCurrentClass();
+      const targetOpt = appState.activePollOption === 'PAUSE' ? 'A' : appState.activePollOption;
+      appState.simRaisedSeats = {};
+
+      cls.seats.forEach(seat => {
+        if (!seat.enabled) return;
+        // Raise hands for ~35% of students who haven't answered yet, or random subset
+        const alreadyVoted = Boolean(appState.currentResponses[seat.id]);
+        const chance = alreadyVoted ? 0.15 : 0.45;
+        if (Math.random() < chance) {
+          appState.simRaisedSeats[seat.id] = { raised: true, cardColor: targetOpt };
+          appState.currentResponses[seat.id] = targetOpt;
+        }
+      });
+
+      updateLiveSeatingUI();
+      showToast(`Simulated students raising hands for Option ${targetOpt}`);
+    }
+
+    function simulateFullClassPoll() {
+      const cls = getCurrentClass();
+      const correctOpt = document.getElementById('correctAnswerSelect').value;
+      const opts = ['A', 'B', 'C', 'D'];
+      appState.simRaisedSeats = {};
+
+      cls.seats.forEach(seat => {
+        if (!seat.enabled) return;
+        // 93% participation rate in simulation
+        if (Math.random() < 0.93) {
+          let chosen = opts[Math.floor(Math.random() * opts.length)];
+          // Bias toward correct option so class accuracy looks realistic (~68%)
+          if (correctOpt !== 'NONE' && Math.random() < 0.58) {
+            chosen = correctOpt;
+          }
+          appState.currentResponses[seat.id] = chosen;
+          if (chosen === appState.activePollOption || appState.detectionMethod === 'COLOR_CARD') {
+            appState.simRaisedSeats[seat.id] = { raised: true, cardColor: chosen };
+          }
+        }
+      });
+
+      updateLiveSeatingUI();
+      showToast('Simulated full 30-student classroom poll across A, B, C, and D!');
+    }
+
+    // =========================================================================
+    // QUESTION RECORDING & LONGITUDINAL PROGRESS ANALYTICS
+    // =========================================================================
+    function recordCurrentQuestion() {
+      const cls = getCurrentClass();
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const subject = document.getElementById('subjectInput').value.trim() || 'General Lesson';
+      const rawPrompt = document.getElementById('questionPromptInput').value.trim();
+      const prompt = rawPrompt || `Spontaneous Q#${cls.history.length + 1} (${timeStr})`;
+      const correctOption = document.getElementById('correctAnswerSelect').value;
+
+      const responsesCopy = { ...appState.currentResponses };
+      const respondedCount = Object.keys(responsesCopy).length;
+
+      if (respondedCount === 0) {
+        showToast('No student responses detected yet — simulate or scan hands first!');
+        return;
+      }
+
+      cls.history.unshift({
+        id: 'q_' + Date.now(),
+        timestamp: timeStr,
+        subject,
+        prompt,
+        correctOption,
+        responses: responsesCopy
+      });
+
+      saveState();
+      updateSavedBadgeCount();
+      renderProgressTab();
+
+      // Keep prompt blank after logging so the next spontaneous question requires zero typing
+      appState.currentQuestionNum++;
+      document.getElementById('questionPromptInput').value = '';
+      appState.currentResponses = {};
+      appState.simRaisedSeats = {};
+      updateLiveSeatingUI();
+
+      showToast(`Logged "${prompt}" (${respondedCount} student responses saved)!`);
+    }
+
+    function updateSavedBadgeCount() {
+      const cls = getCurrentClass();
+      document.getElementById('savedQCountBadge').textContent = String(cls.history.length);
+    }
+
+    function renderProgressTab() {
+      const cls = getCurrentClass();
+      const activeSeats = cls.seats.filter(s => s.enabled);
+      const totalQuestions = cls.history.length;
+      const filterText = (document.getElementById('studentSearchInput')?.value || '').toLowerCase();
+
+      document.getElementById('kpiTotalQuestions').textContent = String(totalQuestions);
+
+      let totalPossibleResponses = totalQuestions * activeSeats.length;
+      let totalActualResponses = 0;
+      let totalGradedResponses = 0;
+      let totalCorrectResponses = 0;
+
+      const tbody = document.getElementById('studentProgressTableBody');
+      tbody.innerHTML = '';
+
+      activeSeats.forEach(seat => {
+        if (filterText && !seat.name.toLowerCase().includes(filterText) && !seat.code.toLowerCase().includes(filterText)) {
+          return;
+        }
+
+        let answered = 0;
+        let graded = 0;
+        let correct = 0;
+        const recentBadges = [];
+
+        cls.history.forEach((q, idx) => {
+          const ans = q.responses[seat.id];
+          if (ans) {
+            answered++;
+            totalActualResponses++;
+            const isGraded = q.correctOption && q.correctOption !== 'NONE';
+            const isRight = isGraded && ans === q.correctOption;
+            if (isGraded) {
+              graded++;
+              totalGradedResponses++;
+              if (isRight) {
+                correct++;
+                totalCorrectResponses++;
+              }
+            }
+            if (idx < 5) {
+              const badgeColor = !isGraded
+                ? 'bg-slate-700 text-slate-200'
+                : (isRight ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40');
+              recentBadges.push(`<span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeColor}">${ans}</span>`);
+            }
+          } else if (idx < 5) {
+            recentBadges.push(`<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-500">—</span>`);
+          }
+        });
+
+        const partRate = totalQuestions > 0 ? Math.round((answered / totalQuestions) * 100) : 0;
+        const accRate = graded > 0 ? Math.round((correct / graded) * 100) : 0;
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/50 transition';
+        tr.innerHTML = `
+          <td class="py-2.5 px-3 font-mono text-indigo-300 font-semibold">${seat.code}</td>
+          <td class="py-2.5 px-3 font-medium text-white">${seat.name}</td>
+          <td class="py-2.5 px-3 text-right font-mono">${answered} / ${totalQuestions}</td>
+          <td class="py-2.5 px-3 text-right">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${partRate >= 75 ? 'bg-emerald-500/15 text-emerald-300' : (partRate >= 40 ? 'bg-amber-500/15 text-amber-300' : 'bg-rose-500/15 text-rose-300')}">${partRate}%</span>
+          </td>
+          <td class="py-2.5 px-3 text-right font-mono">${correct} / ${graded}</td>
+          <td class="py-2.5 px-3 text-right font-bold ${accRate >= 70 ? 'text-sky-400' : 'text-slate-300'}">${graded > 0 ? accRate + '%' : 'N/A'}</td>
+          <td class="py-2.5 px-3"><div class="flex items-center gap-1">${recentBadges.join('')}</div></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const overallPart = totalPossibleResponses > 0 ? Math.round((totalActualResponses / totalPossibleResponses) * 100) : 0;
+      const overallAcc = totalGradedResponses > 0 ? Math.round((totalCorrectResponses / totalGradedResponses) * 100) : 0;
+      document.getElementById('kpiAvgParticipation').textContent = `${overallPart}%`;
+      document.getElementById('kpiAvgAccuracy').textContent = `${overallAcc}%`;
+
+      // Render Question History List
+      const qList = document.getElementById('questionHistoryList');
+      qList.innerHTML = '';
+
+      if (cls.history.length === 0) {
+        qList.innerHTML = `<div class="text-center py-8 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">No questions recorded yet for this class. Run a live scan or click "+ Load Sample Lesson Data".</div>`;
+        return;
+      }
+
+      cls.history.forEach(q => {
+        const counts = { A: 0, B: 0, C: 0, D: 0 };
+        let totalResp = 0;
+        Object.values(q.responses).forEach(v => {
+          if (counts[v] !== undefined) {
+            counts[v]++;
+            totalResp++;
+          }
+        });
+        const rightCount = q.correctOption !== 'NONE' ? (counts[q.correctOption] || 0) : totalResp;
+        const pct = totalResp > 0 ? Math.round((rightCount / totalResp) * 100) : 0;
+
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800/70 hover:bg-slate-800 border border-slate-700/80 rounded-xl p-3 transition cursor-pointer';
+        card.innerHTML = `
+          <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5 gap-2">
+            <span class="font-semibold text-indigo-300">${q.subject} • ${q.timestamp}</span>
+            <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+              <span class="text-[10px]">Key:</span>
+              <select data-edit-qkey="${q.id}" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-white">
+                <option value="NONE" ${q.correctOption === 'NONE' ? 'selected' : ''}>Ungraded</option>
+                <option value="A" ${q.correctOption === 'A' ? 'selected' : ''}>A</option>
+                <option value="B" ${q.correctOption === 'B' ? 'selected' : ''}>B</option>
+                <option value="C" ${q.correctOption === 'C' ? 'selected' : ''}>C</option>
+                <option value="D" ${q.correctOption === 'D' ? 'selected' : ''}>D</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-2" onclick="event.stopPropagation()">
+            <input data-edit-qprompt="${q.id}" type="text" value="${q.prompt}" title="Click to rename spontaneous question anytime"
+              class="w-full bg-slate-900/80 border border-slate-700/80 focus:border-indigo-500 rounded px-2 py-1 text-xs font-semibold text-white focus:outline-none" />
+          </div>
+          <div class="flex items-center justify-between text-[11px]">
+            <div class="flex items-center gap-2">
+              <span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">A: ${counts.A}</span>
+              <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300">B: ${counts.B}</span>
+              <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">C: ${counts.C}</span>
+              <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">D: ${counts.D}</span>
+            </div>
+            <span class="font-semibold text-emerald-400">${totalResp}/${activeSeats.length} Hands (${q.correctOption === 'NONE' ? 'Poll' : pct + '% Correct'})</span>
+          </div>
+        `;
+        card.addEventListener('click', () => {
+          appState.currentResponses = { ...q.responses };
+          document.getElementById('subjectInput').value = q.subject;
+          document.getElementById('questionPromptInput').value = q.prompt;
+          document.getElementById('correctAnswerSelect').value = q.correctOption;
+          switchTab('scanner');
+          updateLiveSeatingUI();
+          showToast('Loaded question responses into Live Scanner view!');
+        });
+        qList.appendChild(card);
+      });
+
+      qList.querySelectorAll('[data-edit-qprompt]').forEach(inp => {
+        inp.addEventListener('change', () => {
+          const qId = inp.getAttribute('data-edit-qprompt');
+          const targetQ = cls.history.find(item => item.id === qId);
+          if (targetQ) {
+            targetQ.prompt = inp.value.trim() || targetQ.prompt;
+            saveState();
+            showToast('Updated question title!');
+          }
+        });
+      });
+
+      qList.querySelectorAll('[data-edit-qkey]').forEach(sel => {
+        sel.addEventListener('change', () => {
+          const qId = sel.getAttribute('data-edit-qkey');
+          const targetQ = cls.history.find(item => item.id === qId);
+          if (targetQ) {
+            targetQ.correctOption = sel.value;
+            saveState();
+            renderProgressTab();
+            showToast('Updated question answer key & recalculated accuracy!');
+          }
+        });
+      });
+    }
+
+    // =========================================================================
+    // SEATING PLAN & PERSPECTIVE EDITOR TAB
+    // =========================================================================
+    function renderSeatingEditorTab() {
+      const cls = getCurrentClass();
+      document.getElementById('editClassNameInput').value = cls.name;
+      document.getElementById('gridRowsInput').value = String(cls.rows);
+      document.getElementById('gridColsInput').value = String(cls.cols);
+      document.getElementById('rowsValLabel').textContent = String(cls.rows);
+      document.getElementById('colsValLabel').textContent = String(cls.cols);
+
+      document.getElementById('perspTopWidth').value = String(cls.perspective?.topWidth || 72);
+      document.getElementById('perspBottomWidth').value = String(cls.perspective?.bottomWidth || 94);
+      document.getElementById('perspTopY').value = String(cls.perspective?.topY || 14);
+      document.getElementById('perspBottomY').value = String(cls.perspective?.bottomY || 92);
+
+      const editorGrid = document.getElementById('seatingEditorGrid');
+      editorGrid.style.gridTemplateColumns = `repeat(${cls.cols}, minmax(105px, 1fr))`;
+      editorGrid.innerHTML = '';
+
+      let enabledCount = 0;
+      cls.seats.forEach(seat => {
+        if (seat.enabled) enabledCount++;
+        const cell = document.createElement('div');
+        cell.className = `p-2 rounded-xl border transition flex flex-col gap-1.5 ${
+          seat.enabled
+            ? 'bg-slate-800/90 border-slate-700'
+            : 'bg-slate-950/50 border-dashed border-slate-800 opacity-55'
+        }`;
+
+        cell.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-mono font-bold text-indigo-400">${seat.code}</span>
+            <button data-toggle-seat="${seat.id}" class="text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+              seat.enabled ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+            }">
+              ${seat.enabled ? 'Active' : 'Disabled'}
+            </button>
+          </div>
+          <input data-seat-name="${seat.id}" type="text" value="${seat.name}" ${seat.enabled ? '' : 'disabled'}
+            class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-500" />
+        `;
+        editorGrid.appendChild(cell);
+      });
+
+      document.getElementById('activeSeatCountEditor').textContent = `${enabledCount} Active Seats`;
+
+      // Attach listeners for seat toggle and name change
+      editorGrid.querySelectorAll('[data-toggle-seat]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const sId = btn.getAttribute('data-toggle-seat');
+          const target = cls.seats.find(s => s.id === sId);
+          if (target) {
+            target.enabled = !target.enabled;
+            saveState();
+            renderSeatingEditorTab();
+            updateLiveSeatingUI();
+          }
+        });
+      });
+
+      editorGrid.querySelectorAll('[data-seat-name]').forEach(inp => {
+        inp.addEventListener('input', () => {
+          const sId = inp.getAttribute('data-seat-name');
+          const target = cls.seats.find(s => s.id === sId);
+          if (target) {
+            target.name = inp.value.trim() || target.code;
+            saveState();
+            updateLiveSeatingUI();
+          }
+        });
+      });
+    }
+
+    function resizeCurrentClassGrid(newRows, newCols) {
+      const cls = getCurrentClass();
+      const existingNames = cls.seats.map(s => s.name);
+      cls.rows = newRows;
+      cls.cols = newCols;
+      cls.seats = buildSeats(newRows, newCols, existingNames);
+      saveState();
+      renderSeatingEditorTab();
+      updateLiveSeatingUI();
+    }
+
+    // =========================================================================
+    // CSV EXPORT & CLIPBOARD SUMMARY
+    // =========================================================================
+    function exportClassCSV() {
+      const cls = getCurrentClass();
+      const activeSeats = cls.seats.filter(s => s.enabled);
+      const headers = ['Seat Code', 'Student Name', 'Questions Answered', 'Total Questions', 'Participation %', 'Correct Answers', 'Accuracy %'];
+      cls.history.forEach((q, idx) => {
+        headers.push(`Q${idx + 1} (${q.subject} - Key ${q.correctOption})`);
+      });
+
+      const rows = [headers.join(',')];
+
+      activeSeats.forEach(seat => {
+        let answered = 0, graded = 0, correct = 0;
+        const qCols = [];
+        cls.history.forEach(q => {
+          const ans = q.responses[seat.id] || '';
+          qCols.push(ans || 'None');
+          if (ans) {
+            answered++;
+            if (q.correctOption && q.correctOption !== 'NONE') {
+              graded++;
+              if (ans === q.correctOption) correct++;
+            }
+          }
+        });
+        const partPct = cls.history.length > 0 ? Math.round((answered / cls.history.length) * 100) : 0;
+        const accPct = graded > 0 ? Math.round((correct / graded) * 100) : 0;
+        const safeName = `"${seat.name.replace(/"/g, '""')}"`;
+        rows.push([seat.code, safeName, answered, cls.history.length, `${partPct}%`, correct, `${accPct}%`, ...qCols].join(','));
+      });
+
+      const csvContent = rows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${cls.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_progress.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Downloaded CSV progress report!');
+    }
+
+    function copyClassSummaryReport() {
+      const cls = getCurrentClass();
+      const activeSeats = cls.seats.filter(s => s.enabled);
+      const lines = [
+        `ClassPulse Report — ${cls.name}`,
+        `Total Questions Logged: ${cls.history.length}`,
+        `Active Students: ${activeSeats.length}`,
+        `----------------------------------------`
+      ];
+      activeSeats.forEach(seat => {
+        let answered = 0, correct = 0, graded = 0;
+        cls.history.forEach(q => {
+          const ans = q.responses[seat.id];
+          if (ans) {
+            answered++;
+            if (q.correctOption !== 'NONE') {
+              graded++;
+              if (ans === q.correctOption) correct++;
+            }
+          }
+        });
+        lines.push(`${seat.code} - ${seat.name}: Participated ${answered}/${cls.history.length}, Correct ${correct}/${graded}`);
+      });
+
+      const text = lines.join('\n');
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('Copied class summary report to clipboard!');
+      } catch (e) {
+        showToast('Ready to copy.');
+      }
+      document.body.removeChild(ta);
+    }
+
+    // =========================================================================
+    // NAVIGATION & EVENT BINDINGS
+    // =========================================================================
+    function populateClassSelector() {
+      const select = document.getElementById('classSelect');
+      select.innerHTML = '';
+      appState.classes.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        if (c.id === appState.currentClassId) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function switchTab(tabName) {
+      appState.activeTab = tabName;
+      const views = {
+        scanner: document.getElementById('viewScanner'),
+        seating: document.getElementById('viewSeating'),
+        progress: document.getElementById('viewProgress')
+      };
+      Object.keys(views).forEach(k => {
+        if (k === tabName) views[k].classList.remove('hidden');
+        else views[k].classList.add('hidden');
+      });
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabName) {
+          btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-indigo-600 text-white shadow';
+        } else {
+          btn.className = 'tab-btn px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white';
+        }
+      });
+
+      if (tabName === 'seating') renderSeatingEditorTab();
+      if (tabName === 'progress') renderProgressTab();
+    }
+
+    function getNextPollOption(currentOpt) {
+      const order = ['A', 'B', 'C', 'D'];
+      const idx = order.indexOf(currentOpt);
+      return order[(idx + 1) % order.length];
+    }
+
+    function setActivePollOption(opt) {
+      if (opt !== 'PAUSE') {
+        appState.lastScannedOption = opt;
+      }
+      appState.activePollOption = opt;
+
+      const hudText = document.getElementById('hudActivePollText');
+      const banner = document.getElementById('handsDownOverlayBanner');
+      const bannerTitle = document.getElementById('handsDownBannerTitle');
+      const bannerSub = document.getElementById('handsDownBannerSub');
+      const lockBtn = document.getElementById('btnLockAndHandsDown');
+      const nextBtnLabel = document.getElementById('nextOptBtnLabel');
+
+      const nextOpt = getNextPollOption(appState.lastScannedOption);
+
+      const colorMap = {
+        A: { label: 'Scanning Option A (Raise Hand = A)', cls: 'text-rose-400', btnCls: 'bg-rose-600 border-rose-400 text-white shadow-lg shadow-rose-600/30' },
+        B: { label: 'Scanning Option B (Raise Hand = B)', cls: 'text-sky-400', btnCls: 'bg-sky-600 border-sky-400 text-white shadow-lg shadow-sky-600/30' },
+        C: { label: 'Scanning Option C (Raise Hand = C)', cls: 'text-emerald-400', btnCls: 'bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-600/30' },
+        D: { label: 'Scanning Option D (Raise Hand = D)', cls: 'text-amber-400', btnCls: 'bg-amber-600 border-amber-400 text-white shadow-lg shadow-amber-600/30' },
+        PAUSE: { label: `Paused — Hands Down (${appState.lastScannedOption} Locked)`, cls: 'text-amber-300', btnCls: 'bg-amber-600 border-amber-400 text-white shadow-lg' }
+      };
+
+      const cfg = colorMap[opt] || colorMap.A;
+      hudText.textContent = cfg.label;
+      hudText.className = 'font-bold ' + cfg.cls;
+
+      if (opt === 'PAUSE') {
+        banner.classList.remove('hidden');
+        bannerTitle.textContent = `✋ Hands Down! Option ${appState.lastScannedOption} Votes Locked`;
+        bannerSub.textContent = `Scanner is paused so lowering hands won't trigger false votes. Click "Next: Scan ${nextOpt} →" when ready.`;
+        lockBtn.innerHTML = `<span>🔒 Option ${appState.lastScannedOption} Locked (Hands Down)</span>`;
+      } else {
+        banner.classList.add('hidden');
+        lockBtn.innerHTML = `<span>✋ Stop &amp; Lock ${opt} (Hands Down)</span>`;
+      }
+
+      nextBtnLabel.textContent = `Next: Scan ${nextOpt} →`;
+
+      document.querySelectorAll('.poll-opt-btn').forEach(btn => {
+        const bOpt = btn.getAttribute('data-option');
+        if (bOpt === opt) {
+          btn.className = `poll-opt-btn py-1.5 rounded-lg text-xs font-bold border transition-all ${cfg.btnCls}`;
+        } else {
+          btn.className = 'poll-opt-btn py-1.5 rounded-lg text-xs font-bold border transition-all bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700';
+        }
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      populateClassSelector();
+      initLiveChart();
+      updateSavedBadgeCount();
+      updateLiveSeatingUI();
+      requestAnimationFrame(renderScannerCanvas);
+
+      // Tab buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.getAttribute('data-tab')));
+      });
+
+      // Class selector
+      document.getElementById('classSelect').addEventListener('change', (e) => {
+        appState.currentClassId = e.target.value;
+        appState.currentResponses = {};
+        appState.simRaisedSeats = {};
+        saveState();
+        updateSavedBadgeCount();
+        updateLiveSeatingUI();
+        if (appState.activeTab === 'seating') renderSeatingEditorTab();
+        if (appState.activeTab === 'progress') renderProgressTab();
+        showToast('Switched to ' + getCurrentClass().name);
+      });
+
+      // Poll Option A / B / C / D / Hold buttons
+      document.querySelectorAll('.poll-opt-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetOpt = btn.getAttribute('data-option');
+          if (targetOpt === 'PAUSE') {
+            appState.simRaisedSeats = {};
+            appState.liveHandRaisedMap = {};
+          }
+          setActivePollOption(targetOpt);
+          updateLiveSeatingUI();
+        });
+      });
+
+      document.getElementById('btnLockAndHandsDown').addEventListener('click', () => {
+        const lockedOpt = appState.lastScannedOption;
+        appState.simRaisedSeats = {};
+        appState.liveHandRaisedMap = {};
+        setActivePollOption('PAUSE');
+        updateLiveSeatingUI();
+        showToast(`Option ${lockedOpt} locked! Ask students to put their hands down before scanning the next option.`);
+      });
+
+      document.getElementById('btnAdvanceNextOption').addEventListener('click', () => {
+        const nextOpt = getNextPollOption(appState.lastScannedOption);
+        appState.simRaisedSeats = {};
+        appState.liveHandRaisedMap = {};
+        setActivePollOption(nextOpt);
+        updateLiveSeatingUI();
+        showToast(`Now scanning Option ${nextOpt} — "Who chooses ${nextOpt}?"`);
+      });
+
+      document.getElementById('lockVotedToggle').addEventListener('change', (e) => {
+        appState.protectLockedVotes = e.target.checked;
+      });
+
+      document.getElementById('correctAnswerSelect').addEventListener('change', updateLiveSeatingUI);
+      document.getElementById('btnSpontaneousQuick').addEventListener('click', () => {
+        document.getElementById('questionPromptInput').value = '';
+        document.getElementById('correctAnswerSelect').value = 'NONE';
+        appState.currentResponses = {};
+        appState.simRaisedSeats = {};
+        appState.liveHandRaisedMap = {};
+        setActivePollOption('A');
+        updateLiveSeatingUI();
+        showToast('Ready for Spontaneous Poll! Ask your question aloud — no typing needed.');
+      });
+
+      // Keyboard shortcuts when not typing in an input field
+      window.addEventListener('keydown', (e) => {
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (appState.activeTab !== 'scanner') return;
+        const k = e.key.toUpperCase();
+        if (k === 'A' || k === '1') setActivePollOption('A');
+        else if (k === 'B' || k === '2') setActivePollOption('B');
+        else if (k === 'C' || k === '3') setActivePollOption('C');
+        else if (k === 'D' || k === '4') setActivePollOption('D');
+        else if (k === 'H' || e.code === 'Space') {
+          e.preventDefault();
+          setActivePollOption('PAUSE');
+        }
+      });
+      document.getElementById('btnRecordQuestion').addEventListener('click', recordCurrentQuestion);
+      document.getElementById('btnClearCurrentPoll').addEventListener('click', () => {
+        appState.currentResponses = {};
+        appState.simRaisedSeats = {};
+        appState.liveHandRaisedMap = {};
+        updateLiveSeatingUI();
+        showToast('Cleared current question responses.');
+      });
+
+      // Webcam & Detection Mode Controls
+      document.getElementById('btnToggleWebcam').addEventListener('click', toggleWebcam);
+      document.getElementById('btnCalibrateBaseline').addEventListener('click', calibrateHandsDownBaseline);
+      document.getElementById('detectionMethodSelect').addEventListener('change', (e) => {
+        appState.detectionMethod = e.target.value;
+        const badge = document.getElementById('scanModeBadge');
+        if (appState.detectionMethod === 'COLOR_CARD') {
+          badge.textContent = '4-Color Card Simultaneous';
+          showToast('4-Color Card Mode: Red=A, Blue=B, Green=C, Yellow=D');
+        } else {
+          badge.textContent = 'Sequential Hand Poll';
+          showToast('Sequential Hand-Raise Mode active');
+        }
+      });
+
+      // Simulator buttons
+      document.getElementById('btnSimWaveRaise').addEventListener('click', simulateWaveForCurrentOption);
+      document.getElementById('btnSimFullClassQuiz').addEventListener('click', simulateFullClassPoll);
+      document.getElementById('btnSimHandsDown').addEventListener('click', () => {
+        appState.simRaisedSeats = {};
+        appState.liveHandRaisedMap = {};
+        updateLiveSeatingUI();
+        showToast('All simulated hands lowered (recorded votes kept).');
+      });
+
+      document.getElementById('sensitivitySlider').addEventListener('input', (e) => {
+        appState.sensitivity = Number(e.target.value);
+        document.getElementById('sensitivityVal').textContent = appState.sensitivity + '%';
+      });
+
+      document.getElementById('mirrorToggle').addEventListener('change', (e) => {
+        appState.mirrorCam = e.target.checked;
+      });
+
+      // Seating & Camera Perspective Config Controls
+      document.getElementById('editClassNameInput').addEventListener('input', (e) => {
+        const cls = getCurrentClass();
+        cls.name = e.target.value.trim() || 'Unnamed Class';
+        saveState();
+        populateClassSelector();
+      });
+
+      document.getElementById('gridRowsInput').addEventListener('change', (e) => {
+        resizeCurrentClassGrid(Number(e.target.value), getCurrentClass().cols);
+      });
+      document.getElementById('gridColsInput').addEventListener('change', (e) => {
+        resizeCurrentClassGrid(getCurrentClass().rows, Number(e.target.value));
+      });
+
+      ['perspTopWidth', 'perspBottomWidth', 'perspTopY', 'perspBottomY'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+          const cls = getCurrentClass();
+          cls.perspective = {
+            topWidth: Number(document.getElementById('perspTopWidth').value),
+            bottomWidth: Number(document.getElementById('perspBottomWidth').value),
+            topY: Number(document.getElementById('perspTopY').value),
+            bottomY: Number(document.getElementById('perspBottomY').value)
+          };
+          saveState();
+        });
+      });
+
+      document.getElementById('btnResetPerspective').addEventListener('click', () => {
+        const cls = getCurrentClass();
+        cls.perspective = { topWidth: 72, bottomWidth: 94, topY: 14, bottomY: 92 };
+        saveState();
+        renderSeatingEditorTab();
+        showToast('Reset camera perspective grid to default.');
+      });
+
+      document.getElementById('btnApplyRoster').addEventListener('click', () => {
+        const raw = document.getElementById('bulkRosterTextarea').value.trim();
+        if (!raw) {
+          showToast('Paste student names separated by commas or newlines first.');
+          return;
+        }
+        const names = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+        const cls = getCurrentClass();
+        let nameIdx = 0;
+        cls.seats.forEach(seat => {
+          if (seat.enabled && nameIdx < names.length) {
+            seat.name = names[nameIdx++];
+          }
+        });
+        saveState();
+        renderSeatingEditorTab();
+        updateLiveSeatingUI();
+        showToast(`Applied ${nameIdx} student names to active seats!`);
+      });
+
+      document.getElementById('btnEnableAllSeats').addEventListener('click', () => {
+        const cls = getCurrentClass();
+        cls.seats.forEach(s => { s.enabled = true; });
+        saveState();
+        renderSeatingEditorTab();
+        updateLiveSeatingUI();
+        showToast('Enabled all desks in the seating grid.');
+      });
+
+      // Add New Class Modal
+      const modal = document.getElementById('newClassModal');
+      document.getElementById('btnNewClassModal').addEventListener('click', () => {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      });
+      const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+      document.getElementById('btnCloseNewClassModal').addEventListener('click', closeModal);
+      document.getElementById('btnCancelNewClass').addEventListener('click', closeModal);
+      document.getElementById('btnConfirmNewClass').addEventListener('click', () => {
+        const name = document.getElementById('newClassNameModalInput').value.trim() || `Class ${appState.classes.length + 1}`;
+        const rows = Math.min(8, Math.max(2, Number(document.getElementById('newClassRowsModalInput').value) || 5));
+        const cols = Math.min(10, Math.max(2, Number(document.getElementById('newClassColsModalInput').value) || 6));
+        const newCls = {
+          id: 'class_' + Date.now(),
+          name,
+          rows,
+          cols,
+          perspective: { topWidth: 72, bottomWidth: 94, topY: 14, bottomY: 92 },
+          seats: buildSeats(rows, cols),
+          history: []
+        };
+        appState.classes.push(newCls);
+        appState.currentClassId = newCls.id;
+        appState.currentResponses = {};
+        saveState();
+        populateClassSelector();
+        renderSeatingEditorTab();
+        updateLiveSeatingUI();
+        updateSavedBadgeCount();
+        closeModal();
+        showToast(`Created "${name}" (${rows}×${cols} layout)!`);
+      });
+
+      // Progress Tab Controls
+      document.getElementById('studentSearchInput').addEventListener('input', renderProgressTab);
+      document.getElementById('btnExportCSV').addEventListener('click', exportClassCSV);
+      document.getElementById('btnCopyReport').addEventListener('click', copyClassSummaryReport);
+      document.getElementById('btnClearHistory').addEventListener('click', () => {
+        const cls = getCurrentClass();
+        cls.history = [];
+        saveState();
+        updateSavedBadgeCount();
+        renderProgressTab();
+        showToast('Cleared recorded question history for this class.');
+      });
+
+      document.getElementById('btnLoadDemoHistory').addEventListener('click', () => {
+        const cls = getCurrentClass();
+        const samplePrompts = [
+          { sub: 'Mathematics', p: 'What is the derivative of x²?', key: 'A' },
+          { sub: 'Science - Physics', p: 'Which planet has the strongest gravitational pull?', key: 'C' },
+          { sub: 'English Literature', p: 'Which theme best describes Chapter 4?', key: 'B' }
+        ];
+        const opts = ['A', 'B', 'C', 'D'];
+        samplePrompts.forEach((sp, idx) => {
+          const resp = {};
+          cls.seats.forEach(s => {
+            if (!s.enabled) return;
+            if (Math.random() < 0.9) {
+              resp[s.id] = Math.random() < 0.65 ? sp.key : opts[Math.floor(Math.random() * opts.length)];
+            }
+          });
+          cls.history.unshift({
+            id: 'q_sample_' + Date.now() + '_' + idx,
+            timestamp: '10:' + (15 + idx * 12) + ' AM',
+            subject: sp.sub,
+            prompt: sp.p,
+            correctOption: sp.key,
+            responses: resp
+          });
+        });
+        saveState();
+        updateSavedBadgeCount();
+        renderProgressTab();
+        showToast('Added 3 sample multi-subject lesson questions!');
+      });
+
+      // Kick off an initial simulated hand wave so the user immediately sees it working
+      simulateFullClassPoll();
+    });
+  </script>
+</body>
+</html>
