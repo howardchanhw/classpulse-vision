@@ -182,8 +182,8 @@
               <button id="btnCalibrateBaseline" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Capture empty/hands-down baseline frame for accurate motion contrast">
                 Calibrate Hands-Down
               </button>
-              <button id="btnFaceZones" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-violet-700 hover:bg-violet-600 text-white transition" title="Detect faces live to place seat boxes (nothing is recorded)">
-                Auto-place from faces
+              <button id="btnFaceZones" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-violet-700 hover:bg-violet-600 text-white transition" title="Point the camera, then scan — faces become seat zones for this lesson (nothing recorded)">
+                Scan faces for this lesson
               </button>
               <select id="detectionMethodSelect" class="bg-slate-800 text-slate-200 text-xs rounded-lg px-2 py-1.5 border border-slate-700 focus:outline-none">
                 <option value="MOTION_ZONE">Mode: Hand-Raise Zone Motion (Sequential A/B/C/D)</option>
@@ -192,7 +192,7 @@
             </div>
           </div>
 
-                      <p id="privacyNote" class="text-[10px] text-slate-500 px-1 pb-1 leading-snug">Camera is live-only — no faces or video are saved; only seat names and A–D answers are stored.</p>
+                      <p id="privacyNote" class="text-[10px] text-slate-500 px-1 pb-1 leading-snug">Each lesson: aim the camera → Scan faces → Calibrate. Live-only — no faces/video saved; only A–D answers are stored.</p>
 <!-- Video + Interactive Overlay Canvas Container -->
           <div class="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
             <video id="webcamVideo" class="hidden w-full h-full object-cover" playsinline muted></video>
@@ -616,6 +616,8 @@
       videoDevices: [],
       preferRearCamera: true,
       faceZoneOverride: null, // { seatId: {x,y,w,h,raiseY,raiseH} } or null
+      faceSeatsMode: false,
+      faceMappedCount: 0,
       faceDetectorReady: false,
       currentQuestionNum: 2,
       // Live runtime maps keyed by seat.id
@@ -729,9 +731,20 @@
         };
       });
       if (appState.faceZoneOverride) {
-        Object.keys(appState.faceZoneOverride).forEach(id => {
-          if (boxes[id]) boxes[id] = { ...boxes[id], ...appState.faceZoneOverride[id] };
-        });
+        if (appState.faceSeatsMode) {
+          // Face-first: mapped seats use face boxes only; others get empty zones (skipped in CV)
+          Object.keys(boxes).forEach(id => {
+            if (appState.faceZoneOverride[id]) {
+              boxes[id] = { ...appState.faceZoneOverride[id] };
+            } else {
+              boxes[id] = { x: 0, y: 0, w: 0, h: 0, raiseY: 0, raiseH: 0 };
+            }
+          });
+        } else {
+          Object.keys(appState.faceZoneOverride).forEach(id => {
+            if (boxes[id]) boxes[id] = { ...boxes[id], ...appState.faceZoneOverride[id] };
+          });
+        }
       }
       seatBoxCoords = boxes;
       return boxes;
@@ -789,7 +802,7 @@
             delegate: 'GPU'
           },
           runningMode: 'IMAGE',
-          minDetectionConfidence: 0.4
+          minDetectionConfidence: 0.35
         });
         appState.faceDetectorReady = true;
         return 'mediapipe';
@@ -838,63 +851,40 @@
         });
       }
       // Filter tiny noise
-      boxes = boxes.filter(b => b.w > 0.02 && b.h > 0.02 && b.w < 0.5);
+      boxes = boxes.filter(b => b.w > 0.012 && b.h > 0.012 && b.w < 0.55 && b.h < 0.55);
       return boxes;
     }
 
     function assignFacesToSeats(faces, cls) {
-      // Sort faces into a rows×cols grid by position (top→bottom, left→right)
-      const active = cls.seats.filter(s => s.enabled);
+      // Ignore perspective grid: sort faces top→bottom, left→right and zip onto enabled seats (row/col order).
+      const active = cls.seats
+        .filter(s => s.enabled)
+        .sort((a, b) => (a.row - b.row) || (a.col - b.col));
       if (!faces.length || !active.length) return null;
 
-      const n = Math.min(faces.length, active.length);
-      // Cluster into rows by Y centres
-      const withC = faces.map(f => ({ ...f, cx: f.x + f.w / 2, cy: f.y + f.h / 2 }));
-      withC.sort((a, b) => a.cy - b.cy || a.cx - b.cx);
-
-      const rows = cls.rows || 5;
-      const cols = cls.cols || 6;
-      // Greedy: take up to rows*cols faces, bucket by row bands
-      const take = withC.slice(0, Math.min(withC.length, rows * cols));
-      // Assign row index by sorting Y into `rows` quantiles based on seat row count
-      take.sort((a, b) => a.cy - b.cy);
-      const rowBuckets = Array.from({ length: rows }, () => []);
-      take.forEach((f, i) => {
-        const r = Math.min(rows - 1, Math.floor(i / Math.max(1, Math.ceil(take.length / rows))));
-        // Better: use equal count per row from sorted list
-      });
-      // Equal-count row split
-      const perRow = Math.ceil(take.length / rows);
-      const sortedY = [...take].sort((a, b) => a.cy - b.cy);
-      const rowLists = [];
-      for (let r = 0; r < rows; r++) {
-        rowLists.push(sortedY.slice(r * perRow, (r + 1) * perRow).sort((a, b) => a.cx - b.cx));
-      }
+      const ranked = faces
+        .map(f => ({ ...f, cx: f.x + f.w / 2, cy: f.y + f.h / 2 }))
+        .sort((a, b) => a.cy - b.cy || a.cx - b.cx);
 
       const override = {};
-      let faceIdx = 0;
-      // Map seat grid row-major (row 0 = back / top of image typically)
-      for (let r = 0; r < rows; r++) {
-        const rowFaces = rowLists[r] || [];
-        for (let c = 0; c < cols; c++) {
-          const seat = cls.seats.find(s => s.row === r && s.col === c);
-          if (!seat || !seat.enabled) continue;
-          const f = rowFaces[c];
-          if (!f) continue;
-          // Face box; raise zone is above the face (hands)
-          const raiseH = Math.min(0.14, Math.max(0.06, f.h * 0.9));
-          const raiseY = Math.max(0, f.y - raiseH * 0.85);
-          override[seat.id] = {
-            x: Math.max(0, f.x - f.w * 0.1),
-            y: f.y,
-            w: Math.min(0.25, f.w * 1.2),
-            h: f.h,
-            raiseY,
-            raiseH
-          };
-          faceIdx++;
-        }
+      const n = Math.min(active.length, ranked.length);
+      for (let i = 0; i < n; i++) {
+        const seat = active[i];
+        const f = ranked[i];
+        const pad = Math.min(0.03, f.w * 0.15);
+        const raiseH = Math.min(0.16, Math.max(0.07, f.h * 1.05));
+        const raiseY = Math.max(0, f.y - raiseH * 0.95);
+        override[seat.id] = {
+          x: Math.max(0, f.x - pad),
+          y: Math.max(0, f.y - pad * 0.5),
+          w: Math.min(0.35, f.w + pad * 2),
+          h: Math.min(0.4, f.h + pad),
+          raiseY,
+          raiseH,
+          fromFace: true
+        };
       }
+      appState.faceMappedCount = n;
       return override;
     }
 
@@ -902,10 +892,10 @@
       const btn = document.getElementById('btnFaceZones');
       try {
         if (!appState.webcamActive) {
-          showToast('Start the webcam first, then tap Auto-place from faces.');
+          showToast('Start the webcam first, then tap Scan faces for this lesson.');
           return;
         }
-        if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+        if (btn) { btn.disabled = true; btn.textContent = 'Scanning faces…'; }
         showToast('Detecting faces (live only — nothing saved)…');
         const faces = await detectFacesInVideo();
         const cls = getCurrentClass();
@@ -919,15 +909,16 @@
           return;
         }
         appState.faceZoneOverride = override;
+        appState.faceSeatsMode = true;
         computeSeatNormalizedBoxes(cls);
         updateLiveSeatingUI();
         if (typeof renderScannerCanvas === 'function') renderScannerCanvas();
-        showToast(`Placed zones on ${Object.keys(override).length} face(s). Then Calibrate Hands-Down.`);
+        showToast(`Lesson seats locked from ${Object.keys(override).length} face(s). Calibrate Hands-Down, then poll.`);
       } catch (e) {
         console.error(e);
         showToast(e.message || 'Face detection unavailable on this device/browser.');
       } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Auto-place from faces'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Scan faces for this lesson'; }
       }
     }
 
@@ -1093,6 +1084,7 @@
 
       cls.seats.forEach(seat => {
         if (!seat.enabled) return;
+        if (appState.faceSeatsMode && appState.faceZoneOverride && !appState.faceZoneOverride[seat.id]) return;
         const box = seatBoxCoords[seat.id];
         if (!box) return;
 
